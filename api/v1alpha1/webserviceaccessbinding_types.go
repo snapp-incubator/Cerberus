@@ -28,8 +28,11 @@ type WebserviceAccessBindingSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of WebserviceAccessBinding. Edit webserviceaccessbinding_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// Subjects are the name of AccessTokens which the access will be granted to
+	Subjects []string `json:"subjects,omitempty"`
+
+	// WebServices are the target service accesses
+	Webservices []string `json:"webservices,omitempty"`
 }
 
 // WebserviceAccessBindingStatus defines the observed state of WebserviceAccessBinding

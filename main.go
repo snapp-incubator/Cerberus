@@ -17,13 +17,16 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 
+	"google.golang.org/grpc"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -35,6 +38,7 @@ import (
 
 	cerberusv1alpha1 "github.com/snapp-incubator/Cerberus/api/v1alpha1"
 	"github.com/snapp-incubator/Cerberus/controllers"
+	"github.com/snapp-incubator/Cerberus/pkg/auth"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -68,22 +72,44 @@ func main() {
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
-
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	// listener, err := net.Listen("tcp", authAddr)
-	// if err != nil {
-	// 	setupLog.Error(err, "problem in binding authorization service")
-	// 	os.Exit(1)
-	// }
+	mgr, err := setupManager(metricsAddr, probeAddr, enableLeaderElection)
+	if err != nil {
+		setupLog.Error(err, "unable to set up manager")
+		os.Exit(1)
+	}
 
-	// grpcOpts := []grpc.ServerOption{
-	// 	grpc.MaxConcurrentStreams(1 << 20),
-	// }
-	// // TODO: add grpc creds to support TLS
-	// srv := grpc.NewServer(grpcOpts...)
-	// auth.RegisterServer(srv)
+	//+kubebuilder:scaffold:builder
 
+	err = setupHealthChecks(mgr)
+	if err != nil {
+		setupLog.Error(err, "unable to set up health/ready check")
+		os.Exit(1)
+	}
+
+	listener, srv, err := setupAuthenticationServer(authAddr, mgr)
+	if err != nil {
+		setupLog.Error(err, "unable to set up authentication server")
+		os.Exit(1)
+	}
+
+	errChan := make(chan error)
+	ctx := ctrl.SetupSignalHandler()
+
+	go runAuthenticationServer(ctx, mgr, listener, srv, errChan)
+	go runManager(ctx, mgr, errChan)
+
+	select {
+	case err := <-errChan:
+		setupLog.Error(err, "cerberus error")
+		os.Exit(1)
+	case <-ctx.Done():
+		os.Exit(0)
+	}
+}
+
+func setupManager(metricsAddr string, probeAddr string, enableLeaderElection bool) (ctrl.Manager, error) {
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
@@ -105,7 +131,7 @@ func main() {
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
-		os.Exit(1)
+		return nil, err
 	}
 
 	if err = (&controllers.AccessTokenReconciler{
@@ -113,62 +139,79 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AccessToken")
-		os.Exit(1)
+		return nil, err
 	}
 	if err = (&controllers.WebServiceReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "WebService")
-		os.Exit(1)
+		return nil, err
 	}
 	if err = (&controllers.WebserviceAccessBindingReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "WebserviceAccessBinding")
-		os.Exit(1)
+		return nil, err
 	}
-	//+kubebuilder:scaffold:builder
 
+	return mgr, nil
+}
+
+func setupHealthChecks(mgr ctrl.Manager) error {
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")
-		os.Exit(1)
+		return err
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up ready check")
-		os.Exit(1)
+		return err
+	}
+	return nil
+}
+
+func setupAuthenticationServer(listenAddress string, mgr ctrl.Manager) (net.Listener, *grpc.Server, error) {
+	listener, err := net.Listen("tcp", listenAddress)
+	if err != nil {
+		setupLog.Error(err, "problem in binding authorization service")
+		return nil, nil, err
 	}
 
-	errChan := make(chan error)
-	ctx := ctrl.SetupSignalHandler()
-
-	go func() {
-		setupLog.Info("started authorization server",
-			"address", authAddr)
-
-		// if err := auth.RunServer(ctx, listener, srv); err != nil {
-		// 	errChan <- fmt.Errorf("error in authorization server: %w", err)
-		// }
-
-		errChan <- nil
-	}()
-
-	go func() {
-		setupLog.Info("started controller")
-
-		if err := mgr.Start(ctx); err != nil {
-			errChan <- fmt.Errorf("error in manager server: %w", err)
-		}
-
-		errChan <- nil
-	}()
-
-	select {
-	case err := <-errChan:
-		setupLog.Error(err, "cerberus error")
-		os.Exit(1)
-	case <-ctx.Done():
-		os.Exit(0)
+	grpcOpts := []grpc.ServerOption{
+		grpc.MaxConcurrentStreams(1 << 20),
 	}
+	// TODO: add grpc creds to support TLS
+	srv := grpc.NewServer(grpcOpts...)
+
+	authenticator, err := auth.NewAuthenticator(
+		mgr.GetClient(),
+		setupLog.WithName("cerberus.authenticator"),
+	)
+	if err != nil {
+		setupLog.Error(err, "unable to create and update authenticator")
+		return nil, nil, err
+	}
+	auth.RegisterServer(srv, authenticator)
+	return listener, srv, nil
+}
+
+func runAuthenticationServer(ctx context.Context, mgr ctrl.Manager, listener net.Listener, srv *grpc.Server, errChan chan error) {
+	setupLog.Info("started controller")
+
+	if err := mgr.Start(ctx); err != nil {
+		errChan <- fmt.Errorf("error in manager server: %w", err)
+	}
+
+	errChan <- nil
+}
+
+func runManager(ctx context.Context, mgr ctrl.Manager, errChan chan error) {
+	setupLog.Info("started controller")
+
+	if err := mgr.Start(ctx); err != nil {
+		errChan <- fmt.Errorf("error in manager server: %w", err)
+	}
+
+	errChan <- nil
 }

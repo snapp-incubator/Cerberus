@@ -25,7 +25,7 @@ import (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // AccessTokenState describes the state of the token and
-// shows if it should be included in authentication or not
+// shows if it should be included in authorization or not
 // +kubebuilder:validation:Enum=Active;Expired;Suspended
 type AccessTokenState string
 
@@ -47,8 +47,8 @@ type AccessTokenSpec struct {
 
 	// State shows the state of the token (whether use token or it's just a draft)
 	// Valid values are:
-	// - "Active" (default): uses token in authentication procedure
-	// - "Expired": won't include token in authentication procedure
+	// - "Active" (default): uses token in authorization procedure
+	// - "Expired": won't include token in authorization procedure
 	// - "Suspended": shows that the token is currently not usable but it may become Active later
 	// +optional
 	State AccessTokenState `json:"active,omitempty"`

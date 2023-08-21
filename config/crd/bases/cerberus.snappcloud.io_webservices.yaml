@@ -15,63 +15,57 @@ spec:
     singular: webservice
   scope: Namespaced
   versions:
-    - name: v1alpha1
-      schema:
-        openAPIV3Schema:
-          description: WebService is the Schema for the webservices API
-          properties:
-            apiVersion:
-              description:
-                "APIVersion defines the versioned schema of this representation
-                of an object. Servers should convert recognized schemas to the latest
-                internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources"
-              type: string
-            kind:
-              description:
-                "Kind is a string value representing the REST resource this
-                object represents. Servers may infer this from the endpoint the client
-                submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds"
-              type: string
-            metadata:
-              type: object
-            spec:
-              description: WebServiceSpec defines the desired state of WebService
-              properties:
-                lookupHeader:
-                  description:
-                    LookupHeader tells Cerberus which header should be used
-                    as Webservice name for the authentication
-                  type: string
-                upstreamHttpAuth:
-                  description:
-                    UpstreamHttpAuth tells Cerberus whether it needs to forward
-                    authentication to another (HTTP) service or not
-                  properties:
-                    address:
-                      description: Address of the upstream authentication service
-                      type: string
-                    readTokenFrom:
-                      default: Authorization
-                      description:
-                        ReadTokenFrom specifies which header contains the
-                        upstream Auth token in the request
-                      type: string
-                    writeTokenTo:
-                      default: Authorization
-                      description:
-                        WriteTokenTo specifies which header should carry
-                        token to upstream service
-                      type: string
-                  required:
-                    - readTokenFrom
-                    - writeTokenTo
-                  type: object
-              type: object
-            status:
-              description: WebServiceStatus defines the observed state of WebService
-              type: object
-          type: object
-      served: true
-      storage: true
-      subresources:
-        status: {}
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: WebService is the Schema for the webservices API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: WebServiceSpec defines the desired state of WebService
+            properties:
+              lookupHeader:
+                description: LookupHeader tells Cerberus which header should be used
+                  as Webservice name for the authentication
+                type: string
+              upstreamHttpAuth:
+                description: UpstreamHttpAuth tells Cerberus whether it needs to forward
+                  authentication to another (HTTP) service or not
+                properties:
+                  address:
+                    description: Address of the upstream authentication service
+                    type: string
+                  readTokenFrom:
+                    default: Authorization
+                    description: ReadTokenFrom specifies which header contains the
+                      upstream Auth token in the request
+                    type: string
+                  writeTokenTo:
+                    default: Authorization
+                    description: WriteTokenTo specifies which header should carry
+                      token to upstream service
+                    type: string
+                required:
+                - readTokenFrom
+                - writeTokenTo
+                type: object
+            type: object
+          status:
+            description: WebServiceStatus defines the observed state of WebService
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

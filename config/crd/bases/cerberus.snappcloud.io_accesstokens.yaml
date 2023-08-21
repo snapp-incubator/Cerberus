@@ -38,9 +38,9 @@ spec:
               active:
                 description: 'State shows the state of the token (whether use token
                   or it''s just a draft) Valid values are: - "Active" (default): uses
-                  token in authentication procedure - "Expired": won''t include token
-                  in authentication procedure - "Suspended": shows that the token
-                  is currently not usable but it may become Active later'
+                  token in authorization procedure - "Expired": won''t include token
+                  in authorization procedure - "Suspended": shows that the token is
+                  currently not usable but it may become Active later'
                 enum:
                 - Active
                 - Expired

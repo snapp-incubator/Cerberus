@@ -5,6 +5,16 @@ metadata:
   creationTimestamp: null
   name: manager-role
 rules:
+- resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - cerberus.snappcloud.io
   resources:
@@ -57,6 +67,20 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - cerberus.snappcloud.io
+  resources:
+  - webserviceaccountbindings
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cerberus.snappcloud.io
+  resources:
+  - webserviceaccountbindings/status
+  verbs:
+  - get
 - apiGroups:
   - cerberus.snappcloud.io
   resources:

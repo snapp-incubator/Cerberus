@@ -1,7 +1,7 @@
 # cerberus
 ![Cerberus](https://github.com/snapp-incubator/Cerberus/assets/47300215/657f42d8-6360-41d7-bc0e-9c0aefa613ce)
 
-// TODO(user): Add simple overview of use/purpose
+Cerberos is a powerful authorization server designed to seamlessly integrate with Contour by implementing the auth_ext interface of Envoy. In the world of modern application deployment and microservices architecture, ensuring secure and controlled access to services is paramount. Cerberos fills this role by providing a dynamic and flexible access control solution tailored to the unique demands of Contour-based applications.
 
 ## Description
 // TODO(user): An in-depth paragraph about your project and overview of use

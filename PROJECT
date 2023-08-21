@@ -10,4 +10,32 @@ plugins:
   scorecard.sdk.operatorframework.io/v2: {}
 projectName: cerberus
 repo: github.com/snapp-incubator/Cerberus
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: snappcloud.io
+  group: cerberus
+  kind: AccessToken
+  path: github.com/snapp-incubator/Cerberus/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: snappcloud.io
+  group: cerberus
+  kind: WebService
+  path: github.com/snapp-incubator/Cerberus/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: snappcloud.io
+  group: cerberus
+  kind: WebserviceAccessBinding
+  path: github.com/snapp-incubator/Cerberus/api/v1alpha1
+  version: v1alpha1
 version: "3"

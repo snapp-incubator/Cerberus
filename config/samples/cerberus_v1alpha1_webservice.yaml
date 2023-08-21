@@ -1,0 +1,12 @@
+apiVersion: cerberus.snappcloud.io/v1alpha1
+kind: WebService
+metadata:
+  labels:
+    app.kubernetes.io/name: webservice
+    app.kubernetes.io/instance: webservice-sample
+    app.kubernetes.io/part-of: cerberus
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: cerberus
+  name: webservice-sample
+spec:
+  # TODO(user): Add fields here

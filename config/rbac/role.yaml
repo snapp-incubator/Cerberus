@@ -1,0 +1,85 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: manager-role
+rules:
+- apiGroups:
+  - cerberus.snappcloud.io
+  resources:
+  - accesstokens
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cerberus.snappcloud.io
+  resources:
+  - accesstokens/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - cerberus.snappcloud.io
+  resources:
+  - accesstokens/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - cerberus.snappcloud.io
+  resources:
+  - webserviceaccessbindings
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cerberus.snappcloud.io
+  resources:
+  - webserviceaccessbindings/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - cerberus.snappcloud.io
+  resources:
+  - webserviceaccessbindings/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - cerberus.snappcloud.io
+  resources:
+  - webservices
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cerberus.snappcloud.io
+  resources:
+  - webservices/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - cerberus.snappcloud.io
+  resources:
+  - webservices/status
+  verbs:
+  - get
+  - patch
+  - update

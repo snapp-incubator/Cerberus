@@ -1,0 +1,12 @@
+apiVersion: cerberus.snappcloud.io/v1alpha1
+kind: WebserviceAccessBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: webserviceaccessbinding
+    app.kubernetes.io/instance: webserviceaccessbinding-sample
+    app.kubernetes.io/part-of: cerberus
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: cerberus
+  name: webserviceaccessbinding-sample
+spec:
+  # TODO(user): Add fields here

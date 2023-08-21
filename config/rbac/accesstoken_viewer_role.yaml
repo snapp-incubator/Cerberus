@@ -1,0 +1,27 @@
+# permissions for end users to view accesstokens.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: accesstoken-viewer-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: cerberus
+    app.kubernetes.io/part-of: cerberus
+    app.kubernetes.io/managed-by: kustomize
+  name: accesstoken-viewer-role
+rules:
+- apiGroups:
+  - cerberus.snappcloud.io
+  resources:
+  - accesstokens
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cerberus.snappcloud.io
+  resources:
+  - accesstokens/status
+  verbs:
+  - get

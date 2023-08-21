@@ -18,10 +18,12 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -52,8 +54,12 @@ func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
+	var authAddr string
+
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.StringVar(&authAddr, "address", ":8082", "The address the authorization service binds to.")
+
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -64,6 +70,19 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	// listener, err := net.Listen("tcp", authAddr)
+	// if err != nil {
+	// 	setupLog.Error(err, "problem in binding authorization service")
+	// 	os.Exit(1)
+	// }
+
+	// grpcOpts := []grpc.ServerOption{
+	// 	grpc.MaxConcurrentStreams(1 << 20),
+	// }
+	// // TODO: add grpc creds to support TLS
+	// srv := grpc.NewServer(grpcOpts...)
+	// auth.RegisterServer(srv)
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
@@ -121,9 +140,35 @@ func main() {
 		os.Exit(1)
 	}
 
-	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		setupLog.Error(err, "problem running manager")
+	errChan := make(chan error)
+	ctx := ctrl.SetupSignalHandler()
+
+	go func() {
+		setupLog.Info("started authorization server",
+			"address", authAddr)
+
+		// if err := auth.RunServer(ctx, listener, srv); err != nil {
+		// 	errChan <- fmt.Errorf("error in authorization server: %w", err)
+		// }
+
+		errChan <- nil
+	}()
+
+	go func() {
+		setupLog.Info("started controller")
+
+		if err := mgr.Start(ctx); err != nil {
+			errChan <- fmt.Errorf("error in manager server: %w", err)
+		}
+
+		errChan <- nil
+	}()
+
+	select {
+	case err := <-errChan:
+		setupLog.Error(err, "cerberus error")
 		os.Exit(1)
+	case <-ctx.Done():
+		os.Exit(0)
 	}
 }

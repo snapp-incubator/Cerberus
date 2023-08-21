@@ -1,4 +1,6 @@
 # cerberus
+![Cerberus](https://github.com/snapp-incubator/Cerberus/assets/47300215/657f42d8-6360-41d7-bc0e-9c0aefa613ce)
+
 // TODO(user): Add simple overview of use/purpose
 
 ## Description

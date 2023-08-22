@@ -49,7 +49,7 @@ const (
 //+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=webservices/status,verbs=get;
 //+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=webserviceaccountbindings,verbs=get;list;watch;
 //+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=webserviceaccountbindings/status,verbs=get;
-//+kubebuilder:rbac:resources=secrets,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=v1,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
 func (a *Authenticator) UpdateCache(ctx context.Context) error {
 	a.updateLock.Lock()

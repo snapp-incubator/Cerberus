@@ -1,16 +1,20 @@
 # cerberus
-![Cerberus](https://github.com/snapp-incubator/Cerberus/assets/47300215/657f42d8-6360-41d7-bc0e-9c0aefa613ce)
+
+![Cerberus](./docs/asssets/imgs/cerberus.webp)
 
 Cerberos is a powerful authorization server designed to seamlessly integrate with Contour by implementing the auth_ext interface of Envoy. In the world of modern application deployment and microservices architecture, ensuring secure and controlled access to services is paramount. Cerberos fills this role by providing a dynamic and flexible access control solution tailored to the unique demands of Contour-based applications.
 
 ## Description
+
 // TODO(user): An in-depth paragraph about your project and overview of use
 
 ## Getting Started
+
 You’ll need a Kubernetes cluster to run against. You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.
 **Note:** Your controller will automatically use the current context in your kubeconfig file (i.e. whatever cluster `kubectl cluster-info` shows).
 
 ### Running on the cluster
+
 1. Install Instances of Custom Resources:
 
 ```sh
@@ -30,6 +34,7 @@ make deploy IMG=<some-registry>/cerberus:tag
 ```
 
 ### Uninstall CRDs
+
 To delete the CRDs from the cluster:
 
 ```sh
@@ -37,6 +42,7 @@ make uninstall
 ```
 
 ### Undeploy controller
+
 UnDeploy the controller from the cluster:
 
 ```sh
@@ -44,15 +50,18 @@ make undeploy
 ```
 
 ## Contributing
+
 // TODO(user): Add detailed information on how you would like others to contribute to this project
 
 ### How it works
+
 This project aims to follow the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/).
 
 It uses [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/),
 which provide a reconcile function responsible for synchronizing resources until the desired state is reached on the cluster.
 
 ### Test It Out
+
 1. Install the CRDs into the cluster:
 
 ```sh
@@ -68,6 +77,7 @@ make run
 **NOTE:** You can also run this in one step by running: `make install run`
 
 ### Modifying the API definitions
+
 If you are editing the API definitions, generate the manifests such as CRs or CRDs using:
 
 ```sh
@@ -93,4 +103,3 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-

@@ -35,8 +35,8 @@ type AccessCacheEntry struct {
 type CerberusReason string
 
 const (
-	CerberusReasonOK                                = "ok"
-	CerberusReasonUnauthorized                      = "unauthorized"
+	CerberusReasonOK                 CerberusReason = "ok"
+	CerberusReasonUnauthorized       CerberusReason = "unauthorized"
 	CerberusReasonTokenEmpty         CerberusReason = "token-empty"
 	CerberusReasonLookupEmpty        CerberusReason = "lookup-empty"
 	CerberusReasonTokenNotFound      CerberusReason = "token-notfound"

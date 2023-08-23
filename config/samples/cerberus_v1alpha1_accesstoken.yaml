@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Secret
 metadata:
-  name: sample_access
+  name: sample-access
   labels:
     cerberus.snappcloud.io/secret: "true"
 data:
@@ -20,4 +20,4 @@ metadata:
 spec:
   active: Active
   secretRef:
-    name: "sample_access"
+    name: "sample-access"

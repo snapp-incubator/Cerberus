@@ -17,9 +17,9 @@ type Authenticator struct {
 
 	accessCache   *AccessCache
 	servicesCache *ServicesCache
-	cacheLock     *sync.RWMutex
+	cacheLock     sync.RWMutex
 
-	updateLock *sync.Mutex
+	updateLock sync.Mutex
 }
 
 type AccessCache map[string]AccessCacheEntry

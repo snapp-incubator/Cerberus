@@ -113,7 +113,7 @@ func setupManager(
 	metricsAddr string,
 	probeAddr string,
 	enableLeaderElection bool,
-	authenticator *auth.Authenticator,
+	cache controllers.ProcessCache,
 ) (ctrl.Manager, error) {
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
@@ -138,6 +138,8 @@ func setupManager(
 		setupLog.Error(err, "unable to start manager")
 		return nil, err
 	}
+
+	setupLog.Info(fmt.Sprintf("authenticator: %v", authenticator))
 
 	if err = (&controllers.AccessTokenReconciler{
 		Client: mgr.GetClient(),

@@ -139,12 +139,12 @@ func setupManager(
 		return nil, err
 	}
 
-	setupLog.Info(fmt.Sprintf("authenticator: %v", authenticator))
+	setupLog.Info(fmt.Sprintf("authenticator: %v", cache))
 
 	if err = (&controllers.AccessTokenReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
-		Cache:  authenticator,
+		Cache:  cache,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AccessToken")
 		return nil, err
@@ -152,7 +152,7 @@ func setupManager(
 	if err = (&controllers.WebServiceReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
-		Cache:  authenticator,
+		Cache:  cache,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "WebService")
 		return nil, err
@@ -160,7 +160,7 @@ func setupManager(
 	if err = (&controllers.WebserviceAccessBindingReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
-		Cache:  authenticator,
+		Cache:  cache,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "WebserviceAccessBinding")
 		return nil, err

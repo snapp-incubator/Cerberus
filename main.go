@@ -74,7 +74,13 @@ func main() {
 	flag.Parse()
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	mgr, err := setupManager(metricsAddr, probeAddr, enableLeaderElection)
+	listener, srv, authenticator, err := setupAuthenticationServer(authAddr)
+	if err != nil {
+		setupLog.Error(err, "unable to set up authentication server")
+		os.Exit(1)
+	}
+
+	mgr, err := setupManager(metricsAddr, probeAddr, enableLeaderElection, authenticator)
 	if err != nil {
 		setupLog.Error(err, "unable to set up manager")
 		os.Exit(1)
@@ -85,12 +91,6 @@ func main() {
 	err = setupHealthChecks(mgr)
 	if err != nil {
 		setupLog.Error(err, "unable to set up health/ready check")
-		os.Exit(1)
-	}
-
-	listener, srv, err := setupAuthenticationServer(authAddr, mgr)
-	if err != nil {
-		setupLog.Error(err, "unable to set up authentication server")
 		os.Exit(1)
 	}
 
@@ -109,7 +109,12 @@ func main() {
 	}
 }
 
-func setupManager(metricsAddr string, probeAddr string, enableLeaderElection bool) (ctrl.Manager, error) {
+func setupManager(
+	metricsAddr string,
+	probeAddr string,
+	enableLeaderElection bool,
+	authenticator *auth.Authenticator,
+) (ctrl.Manager, error) {
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
@@ -137,6 +142,7 @@ func setupManager(metricsAddr string, probeAddr string, enableLeaderElection boo
 	if err = (&controllers.AccessTokenReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Cache:  authenticator,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AccessToken")
 		return nil, err
@@ -144,6 +150,7 @@ func setupManager(metricsAddr string, probeAddr string, enableLeaderElection boo
 	if err = (&controllers.WebServiceReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Cache:  authenticator,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "WebService")
 		return nil, err
@@ -151,6 +158,7 @@ func setupManager(metricsAddr string, probeAddr string, enableLeaderElection boo
 	if err = (&controllers.WebserviceAccessBindingReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Cache:  authenticator,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "WebserviceAccessBinding")
 		return nil, err
@@ -171,11 +179,11 @@ func setupHealthChecks(mgr ctrl.Manager) error {
 	return nil
 }
 
-func setupAuthenticationServer(listenAddress string, mgr ctrl.Manager) (net.Listener, *grpc.Server, error) {
+func setupAuthenticationServer(listenAddress string) (net.Listener, *grpc.Server, *auth.Authenticator, error) {
 	listener, err := net.Listen("tcp", listenAddress)
 	if err != nil {
 		setupLog.Error(err, "problem in binding authorization service")
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	grpcOpts := []grpc.ServerOption{
@@ -189,10 +197,10 @@ func setupAuthenticationServer(listenAddress string, mgr ctrl.Manager) (net.List
 	)
 	if err != nil {
 		setupLog.Error(err, "unable to create and update authenticator")
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	auth.RegisterServer(srv, authenticator)
-	return listener, srv, nil
+	return listener, srv, authenticator, nil
 }
 
 func runAuthenticationServer(ctx context.Context, listener net.Listener, srv *grpc.Server, errChan chan error) {

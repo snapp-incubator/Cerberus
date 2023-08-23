@@ -46,7 +46,7 @@ jobs:
       - name: Set Image tag
         shell: bash
         id: tag
-        run: echo "tag=ghcr.io/snapp-incubator/Cerberus:$GITHUB_SHA_SHORT" >> $GITHUB_OUTPUT
+        run: echo "tag=ghcr.io/snapp-incubator/cerberus:$GITHUB_SHA_SHORT" >> $GITHUB_OUTPUT
 
       - uses: docker/login-action@v2
         with:

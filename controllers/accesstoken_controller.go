@@ -31,6 +31,7 @@ import (
 type AccessTokenReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	Cache  *ProcessCache
 }
 
 //+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=accesstokens,verbs=get;list;watch;create;update;patch;delete
@@ -49,9 +50,9 @@ type AccessTokenReconciler struct {
 func (r *AccessTokenReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
-	// TODO(user): your logic here
+	err := (*r.Cache).UpdateCache(r.Client, ctx)
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, err
 }
 
 // SetupWithManager sets up the controller with the Manager.

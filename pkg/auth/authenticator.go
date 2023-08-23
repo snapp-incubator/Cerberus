@@ -13,14 +13,13 @@ import (
 )
 
 type Authenticator struct {
-	client.Client
 	logger logr.Logger
 
 	accessCache   *AccessCache
 	servicesCache *ServicesCache
-	cacheLock     sync.RWMutex
+	cacheLock     *sync.RWMutex
 
-	updateLock sync.Mutex
+	updateLock *sync.Mutex
 }
 
 type AccessCache map[string]AccessCacheEntry
@@ -51,7 +50,7 @@ const (
 //+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=webserviceaccountbindings/status,verbs=get;
 //+kubebuilder:rbac:groups=v1,namespace=cerberus-operator-system,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
-func (a *Authenticator) UpdateCache(ctx context.Context) error {
+func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context) error {
 	a.updateLock.Lock()
 	defer a.updateLock.Unlock()
 
@@ -61,23 +60,23 @@ func (a *Authenticator) UpdateCache(ctx context.Context) error {
 	bindings := &cerberusv1alpha1.WebserviceAccessBindingList{}
 	webservices := &cerberusv1alpha1.WebServiceList{}
 
-	err = a.Client.List(ctx, tokens)
+	err = c.List(ctx, tokens)
 	if err != nil {
 		return err
 	}
 
-	err = a.Client.List(ctx, bindings)
+	err = c.List(ctx, bindings)
 	if err != nil {
 		return err
 	}
 
-	err = a.Client.List(ctx, webservices)
+	err = c.List(ctx, webservices)
 	if err != nil {
 		return err
 	}
 
 	// TODO find cleaner way to select
-	err = a.Client.List(ctx, secrets,
+	err = c.List(ctx, secrets,
 		client.MatchingLabels{"cerberus.snappcloud.io/secret": "true"},
 	)
 	if err != nil {
@@ -186,13 +185,11 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response,
 	}, nil
 }
 
-func NewAuthenticator(c client.Client, logger logr.Logger) (*Authenticator, error) {
+func NewAuthenticator(logger logr.Logger) (*Authenticator, error) {
 	a := Authenticator{
-		Client: c,
 		logger: logger,
 	}
-	err := a.UpdateCache(context.Background())
-	return &a, err
+	return &a, nil
 }
 
 // func (a *Authenticator) RegisterWithManager(mgr ctrl.Manager) error {

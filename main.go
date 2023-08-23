@@ -97,7 +97,7 @@ func main() {
 	errChan := make(chan error)
 	ctx := ctrl.SetupSignalHandler()
 
-	go runAuthenticationServer(ctx, mgr, listener, srv, errChan)
+	go runAuthenticationServer(ctx, listener, srv, errChan)
 	go runManager(ctx, mgr, errChan)
 
 	select {
@@ -185,7 +185,6 @@ func setupAuthenticationServer(listenAddress string, mgr ctrl.Manager) (net.List
 	srv := grpc.NewServer(grpcOpts...)
 
 	authenticator, err := auth.NewAuthenticator(
-		mgr.GetClient(),
 		setupLog.WithName("cerberus.authenticator"),
 	)
 	if err != nil {
@@ -196,11 +195,11 @@ func setupAuthenticationServer(listenAddress string, mgr ctrl.Manager) (net.List
 	return listener, srv, nil
 }
 
-func runAuthenticationServer(ctx context.Context, mgr ctrl.Manager, listener net.Listener, srv *grpc.Server, errChan chan error) {
-	setupLog.Info("started controller")
+func runAuthenticationServer(ctx context.Context, listener net.Listener, srv *grpc.Server, errChan chan error) {
+	setupLog.Info("starting authorization server")
 
-	if err := mgr.Start(ctx); err != nil {
-		errChan <- fmt.Errorf("error in manager server: %w", err)
+	if err := auth.RunServer(ctx, listener, srv); err != nil {
+		errChan <- fmt.Errorf("authorization server failed: %w", err)
 	}
 
 	errChan <- nil

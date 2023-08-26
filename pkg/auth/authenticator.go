@@ -169,6 +169,8 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response,
 	token := request.Request.Header.Get("X-Cerberus-Token")
 
 	ok, reason := a.TestAccess(wsvc, token)
+	a.logger.Info("checking request", "res(ok)", ok, "req", request)
+
 	var httpStatusCode int
 	if ok {
 		httpStatusCode = http.StatusOK

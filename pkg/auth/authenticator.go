@@ -17,8 +17,8 @@ type Authenticator struct {
 
 	accessCache   *AccessCache
 	servicesCache *ServicesCache
-	cacheLock     sync.RWMutex
 
+	cacheLock  sync.RWMutex
 	updateLock sync.Mutex
 }
 
@@ -50,6 +50,7 @@ const (
 //+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=webserviceaccountbindings/status,verbs=get;
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
+// TODO add Secrets to be watched
 func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context) error {
 	a.updateLock.Lock()
 	defer a.updateLock.Unlock()

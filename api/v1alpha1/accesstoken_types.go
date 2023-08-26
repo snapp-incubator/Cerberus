@@ -66,6 +66,9 @@ type AccessTokenSpec struct {
 	TokenSecretRef *corev1.LocalObjectReference `json:"secretRef,omitempty"`
 }
 
+// TODO use AccessToken.Metadata.Name as TokenSecretRef
+// TODO next step: create copy of secret in AccessToken's namespace
+
 // AccessTokenStatus defines the observed state of AccessToken
 type AccessTokenStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster

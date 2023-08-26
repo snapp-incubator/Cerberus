@@ -1,6 +1,9 @@
 ## Append samples you want in your CSV to this file as resources ##
 resources:
-- cerberus_v1alpha1_accesstoken.yaml
-- cerberus_v1alpha1_webservice.yaml
-- cerberus_v1alpha1_webserviceaccessbinding.yaml
+  - cerberus_v1alpha1_accesstoken.yaml
+  - cerberus_v1alpha1_webservice.yaml
+  - cerberus_v1alpha1_webserviceaccessbinding.yaml
+  - cerberus_service.yaml
+  - projectcontour_v1_extentionservice.yaml
+  - projectcontour_v1_httpproxy.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

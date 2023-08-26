@@ -125,6 +125,8 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context) error 
 		newServicesCache[webservice.Name] = struct{}{}
 	}
 
+	a.logger.Info("new access cache", "accessCache", newAccessCache, "servicesCache", newServicesCache)
+
 	a.cacheLock.Lock()
 	defer a.cacheLock.Unlock()
 	a.accessCache = &newAccessCache

@@ -1,0 +1,29 @@
+apiVersion: projectcontour.io/v1
+kind: HTTPProxy
+metadata:
+  name: cerberus-test-route
+  namespace: monitoring
+spec:
+  ingressClassName: private
+  routes:
+    - conditions:
+        - exact: /
+      enableWebsockets: false
+      permitInsecure: false
+      authorization:
+        extensionRef:
+          namespace: cerberus-system
+          name: cerberus-auth
+        authPolicy:
+          context:
+            X-Cerberus-Webservice: "cerberus-webservice-sample"
+      services:
+        - name: health-be
+          port: 8080
+          weight: 100
+      timeoutPolicy:
+        idle: 5m
+        idleConnection: 1h
+        response: 30s
+  virtualhost:
+    fqdn: test.cerberus.snappcloud.io

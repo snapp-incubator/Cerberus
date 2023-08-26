@@ -50,16 +50,3 @@ spec:
               memory: 64Mi
         - name: manager
           image: ghcr.io/snapp-incubator/cerberus:2a3566
-          args:
-            - "--health-probe-bind-address=:8081"
-            - "--metrics-bind-address=127.0.0.1:8080"
-            - "--leader-elect"
-            - "--address=127.0.0.1:8082"
-          resources:
-            limits:
-              cpu: 500m
-              memory: 2Gi
-            requests:
-              cpu: 5m
-              memory: 2Gi
-          ports:

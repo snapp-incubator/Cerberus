@@ -73,7 +73,7 @@ spec:
             - "--metrics-bind-address=127.0.0.1:8080"
             - "--leader-elect"
             - "--address=127.0.0.1:8082"
-          image: ghcr.io/snapp-incubator/cerberus:main
+          image: ghcr.io/snapp-incubator/cerberus:531975
           name: manager
           securityContext:
             allowPrivilegeEscalation: false

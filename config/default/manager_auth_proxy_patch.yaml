@@ -48,5 +48,3 @@ spec:
             requests:
               cpu: 5m
               memory: 64Mi
-        - name: manager
-          image: ghcr.io/snapp-incubator/cerberus:2a3566

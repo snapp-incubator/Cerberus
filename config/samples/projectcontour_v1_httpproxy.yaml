@@ -10,13 +10,6 @@ spec:
         - exact: /
       enableWebsockets: false
       permitInsecure: false
-      authorization:
-        extensionRef:
-          namespace: cerberus-system
-          name: cerberus-auth
-        authPolicy:
-          context:
-            X-Cerberus-Webservice: "cerberus-webservice-sample"
       services:
         - name: health-be
           port: 8080
@@ -27,3 +20,10 @@ spec:
         response: 30s
   virtualhost:
     fqdn: test.cerberus.snappcloud.io
+    authorization:
+      extensionRef:
+        namespace: cerberus-system
+        name: cerberus-auth
+      authPolicy:
+        context:
+          X-Cerberus-Webservice: "cerberus-webservice-sample"

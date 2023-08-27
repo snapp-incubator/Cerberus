@@ -60,9 +60,17 @@ func main() {
 	var probeAddr string
 	var authAddr string
 
+	var tlsCertPath string
+	var tlsKeyPath string
+	var tlsCaPath string
+
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.StringVar(&authAddr, "address", ":8082", "The address the authorization service binds to.")
+
+	flag.StringVar(&tlsCertPath, "tls-cert-path", "", "grpc Authentication server TLS certificate")
+	flag.StringVar(&tlsKeyPath, "tls-key-path", "", "grpc Authentication server TLS key")
+	flag.StringVar(&tlsCaPath, "tls-ca-path", "", "grpc Authentication server CA certificate")
 
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
@@ -74,7 +82,7 @@ func main() {
 	flag.Parse()
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	listener, srv, authenticator, err := setupAuthenticationServer(authAddr)
+	listener, srv, authenticator, err := setupAuthenticationServer(authAddr, tlsCertPath, tlsKeyPath, tlsCaPath)
 	if err != nil {
 		setupLog.Error(err, "unable to set up authentication server")
 		os.Exit(1)
@@ -181,7 +189,7 @@ func setupHealthChecks(mgr ctrl.Manager) error {
 	return nil
 }
 
-func setupAuthenticationServer(listenAddress string) (net.Listener, *grpc.Server, *auth.Authenticator, error) {
+func setupAuthenticationServer(listenAddress, tlsCertPath, tlsKeyPath, tlsCaPath string) (net.Listener, *grpc.Server, *auth.Authenticator, error) {
 	listener, err := net.Listen("tcp", listenAddress)
 	if err != nil {
 		setupLog.Error(err, "problem in binding authorization service")
@@ -191,7 +199,16 @@ func setupAuthenticationServer(listenAddress string) (net.Listener, *grpc.Server
 	grpcOpts := []grpc.ServerOption{
 		grpc.MaxConcurrentStreams(1 << 20),
 	}
-	// TODO: add grpc creds to support TLS
+
+	if tlsCertPath != "" && tlsKeyPath != "" {
+		creds, err := auth.NewServerCredentials(tlsCertPath, tlsKeyPath, tlsCaPath)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		grpcOpts = append(grpcOpts, grpc.Creds(creds))
+	}
+
 	srv := grpc.NewServer(grpcOpts...)
 
 	authenticator, err := auth.NewAuthenticator(

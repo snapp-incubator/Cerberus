@@ -7,4 +7,5 @@ resources:
   - projectcontour_v1_extentionservice.yaml
   - projectcontour_v1_httpproxy.yaml
   - issuer.yaml
+  - cert-manager_cert.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

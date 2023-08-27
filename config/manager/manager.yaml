@@ -61,15 +61,6 @@ spec:
       #             operator: In
       #             values:
       #               - linux
-      securityContext:
-        runAsNonRoot: true
-        # TODO(user): For common cases that do not require escalating privileges
-        # it is recommended to ensure that all your Pods/Containers are restrictive.
-        # More info: https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted
-        # Please uncomment the following code if your project does NOT have to work on old Kubernetes
-        # versions < 1.19 or on vendors versions which do NOT support this field by default (i.e. Openshift < 4.11 ).
-        # seccompProfile:
-        #   type: RuntimeDefault
       containers:
         - command:
             - /manager
@@ -81,17 +72,12 @@ spec:
             - "--tls-key-path=/opt/cert/tls.key"
             - "--tls-cert-path=/opt/cert/tls.crt"
             - "--tls-ca-path=/opt/cert/ca.crt"
-          image: ghcr.io/snapp-incubator/cerberus:76b3a6
+          image: ghcr.io/snapp-incubator/cerberus:fad810
           name: manager
           volumeMounts:
-          - mountPath: /opt/cert
-            name: cert
-            readOnly: true
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - "ALL"
+            - mountPath: /opt/cert
+              name: cert
+              readOnly: true
           ports:
             - containerPort: 8080
               name: metrics

@@ -6,4 +6,5 @@ resources:
   - cerberus_service.yaml
   - projectcontour_v1_extentionservice.yaml
   - projectcontour_v1_httpproxy.yaml
+  - issuer.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

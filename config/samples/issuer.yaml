@@ -1,0 +1,9 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  labels:
+    app.kubernetes.io/instance: cerberus
+  name: cerberus-selfsigned-issuer
+  namespace: cerberus-system
+spec:
+  selfSigned: {}

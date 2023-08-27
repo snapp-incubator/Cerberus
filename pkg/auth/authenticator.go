@@ -165,7 +165,7 @@ func (a *Authenticator) TestAccess(wsvc string, token string) (bool, CerberusRea
 }
 
 func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response, error) {
-	wsvc := request.Request.Header.Get("X-Cerberus-Webservice")
+	wsvc := request.Context["webservice"]
 	token := request.Request.Header.Get("X-Cerberus-Token")
 
 	ok, reason := a.TestAccess(wsvc, token)

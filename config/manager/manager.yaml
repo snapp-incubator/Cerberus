@@ -36,6 +36,11 @@ spec:
       labels:
         control-plane: controller-manager
     spec:
+      volumes:
+        - name: cert
+          secret:
+            defaultMode: 420
+            secretName: cerberus-server-cert
       # TODO(user): Uncomment the following code to configure the nodeAffinity expression
       # according to the platforms which are supported by your solution.
       # It is considered best practice to support multiple architectures. You can
@@ -72,9 +77,16 @@ spec:
             - "--health-probe-bind-address=:8081"
             - "--metrics-bind-address=127.0.0.1:8080"
             - "--leader-elect"
-            - "--address=127.0.0.1:8082"
-          image: ghcr.io/snapp-incubator/cerberus:531975
+            - "--address=0.0.0.0:8082"
+            - "--tls-key-path=/opt/cert/tls.key"
+            - "--tls-cert-path=/opt/cert/tls.crt"
+            - "--tls-ca-path=/opt/cert/ca.crt"
+          image: ghcr.io/snapp-incubator/cerberus:76b3a6
           name: manager
+          volumeMounts:
+          - mountPath: /opt/cert
+            name: cert
+            readOnly: true
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

@@ -279,3 +279,10 @@ catalog-build: opm ## Build a catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
 	$(MAKE) docker-push IMG=$(CATALOG_IMG)
+
+.PHONY: gen-doc
+gen-doc:
+	go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@latest
+	mv README.md README.md.bck
+	~/go/bin/gomarkdoc --output '{{.Dir}}/README.md' ./...
+	mv README.md.bck README.md

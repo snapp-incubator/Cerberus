@@ -22,6 +22,7 @@ type Authenticator struct {
 	updateLock sync.Mutex
 }
 
+type ExtraHeaders map[string]string
 type AccessCache map[string]AccessCacheEntry
 type ServicesCache map[string]struct{}
 
@@ -136,35 +137,44 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 	return nil
 }
 
-func (a *Authenticator) TestAccess(wsvc string, token string) (bool, CerberusReason) {
+
+func (a *Authenticator) TestAccess(wsvc string, token string) (bool, CerberusReason, ExtraHeaders) {
 	a.cacheLock.RLock()
 	defer a.cacheLock.RUnlock()
 
+	newExtraHeaders := make(ExtraHeaders)
+
 	if wsvc == "" {
-		return false, CerberusReasonLookupEmpty
+		return false, CerberusReasonLookupEmpty, newExtraHeaders
 	}
 	if token == "" {
-		return false, CerberusReasonTokenEmpty
+		return false, CerberusReasonTokenEmpty, newExtraHeaders
 	}
 
 	if _, ok := (*a.servicesCache)[wsvc]; !ok {
-		return false, CerberusReasonWebserviceNotFound
-	}
-	if _, ok := (*a.accessCache)[token]; !ok {
-		return false, CerberusReasonTokenNotFound
+		return false, CerberusReasonWebserviceNotFound, newExtraHeaders
 	}
 
-	if _, ok := (*a.accessCache)[token].allowedServices[wsvc]; !ok {
-		return false, CerberusReasonUnauthorized
+	ac, ok := (*a.accessCache)[token]
+
+	if !ok {
+		return false, CerberusReasonTokenNotFound, newExtraHeaders
 	}
-	return true, CerberusReasonOK
+
+	newExtraHeaders["Access-Token-Name"] = ac.AccessToken.ObjectMeta.Name
+
+	if _, ok := (*a.accessCache)[token].allowedServices[wsvc]; !ok {
+		return false, CerberusReasonUnauthorized, newExtraHeaders
+	}
+
+	return true, CerberusReasonOK, newExtraHeaders
 }
 
 func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response, error) {
 	wsvc := request.Context["webservice"]
 	token := request.Request.Header.Get("X-Cerberus-Token")
 
-	ok, reason := a.TestAccess(wsvc, token)
+	ok, reason, extraHeaders := a.TestAccess(wsvc, token)
 	a.logger.Info("checking request", "res(ok)", ok, "req", request)
 
 	var httpStatusCode int
@@ -174,15 +184,21 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response,
 		httpStatusCode = http.StatusUnauthorized
 	}
 
+	response := http.Response{
+		StatusCode: httpStatusCode,
+		Header: http.Header{
+			"Auth-Handler":    {"cerberus"},
+			"Cerberus-Reason": {string(reason)},
+		},
+	}
+
+	for key, value := range extraHeaders {
+		response.Header.Add(key, value)
+	}
+
 	return &Response{
 		Allow: ok,
-		Response: http.Response{
-			StatusCode: httpStatusCode,
-			Header: http.Header{
-				"Auth-Handler":    {"cerberus"},
-				"Cerberus-Reason": {string(reason)},
-			},
-		},
+		Response: response,
 	}, nil
 }
 

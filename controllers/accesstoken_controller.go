@@ -30,8 +30,9 @@ import (
 // AccessTokenReconciler reconciles a AccessToken object
 type AccessTokenReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
-	Cache  ProcessCache
+	Scheme   *runtime.Scheme
+	Cache    ProcessCache
+	ReadOnly bool
 }
 
 //+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=accesstokens,verbs=get;list;watch;create;update;patch;delete

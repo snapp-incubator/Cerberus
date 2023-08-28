@@ -51,7 +51,7 @@ const (
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
 // TODO add Secrets to be watched
-func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context) error {
+func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOnly bool) error {
 	a.updateLock.Lock()
 	defer a.updateLock.Unlock()
 
@@ -135,11 +135,6 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context) error 
 	return nil
 }
 
-// TODO reconcile on secret change (list of secrets can be obtained during cahceUpdates)
-// func (a *Authenticator) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-
-// }
-
 func (a *Authenticator) TestAccess(wsvc string, token string) (bool, CerberusReason) {
 	a.cacheLock.RLock()
 	defer a.cacheLock.RUnlock()
@@ -196,9 +191,3 @@ func NewAuthenticator(logger logr.Logger) (*Authenticator, error) {
 	}
 	return &a, nil
 }
-
-// func (a *Authenticator) RegisterWithManager(mgr ctrl.Manager) error {
-// 	return ctrl.NewControllerManagedBy(mgr).
-// 		For(&v1.Secret{}).
-// 		Complete(a)
-// }

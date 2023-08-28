@@ -150,25 +150,28 @@ func setupManager(
 	setupLog.Info(fmt.Sprintf("authenticator: %v", cache))
 
 	if err = (&controllers.AccessTokenReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Cache:  cache,
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Cache:    cache,
+		ReadOnly: !enableLeaderElection,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AccessToken")
 		return nil, err
 	}
 	if err = (&controllers.WebServiceReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Cache:  cache,
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Cache:    cache,
+		ReadOnly: !enableLeaderElection,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "WebService")
 		return nil, err
 	}
 	if err = (&controllers.WebserviceAccessBindingReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Cache:  cache,
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Cache:    cache,
+		ReadOnly: !enableLeaderElection,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "WebserviceAccessBinding")
 		return nil, err

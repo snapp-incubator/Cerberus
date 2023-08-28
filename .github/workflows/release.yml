@@ -42,7 +42,7 @@ jobs:
           context: .
           platforms: linux/amd64
           push: true
-          tags: ${{ steps.tagName.outputs.tag }}
+          tags: ghcr.io/snapp-incubator/cerberus:${{ steps.tagName.outputs.tag }}
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Create Release

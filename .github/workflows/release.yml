@@ -25,6 +25,12 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - uses: little-core-labs/get-git-tag@v3.0.1
+        id: tagName
+        with:
+          tagRegex: "refs/tags/v(.*)"
+          tagRegexGroup: 1
+
       - uses: docker/metadata-action@v4
         id: meta
         with:
@@ -36,7 +42,7 @@ jobs:
           context: .
           platforms: linux/amd64
           push: true
-          tags: ${{ github.ref }}
+          tags: ${{ steps.tagName.outputs.tag }}
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Create Release

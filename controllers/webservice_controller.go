@@ -30,8 +30,9 @@ import (
 // WebServiceReconciler reconciles a WebService object
 type WebServiceReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
-	Cache  ProcessCache
+	Scheme   *runtime.Scheme
+	Cache    ProcessCache
+	ReadOnly bool
 }
 
 //+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=webservices,verbs=get;list;watch;create;update;patch;delete
@@ -50,7 +51,7 @@ type WebServiceReconciler struct {
 func (r *WebServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
-	err := r.Cache.UpdateCache(r.Client, ctx)
+	err := r.Cache.UpdateCache(r.Client, ctx, r.ReadOnly)
 
 	return ctrl.Result{}, err
 }

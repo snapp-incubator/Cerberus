@@ -28,7 +28,7 @@ spec:
   selector:
     matchLabels:
       control-plane: controller-manager
-  replicas: 1
+  replicas: 2
   template:
     metadata:
       annotations:
@@ -67,7 +67,6 @@ spec:
           args:
             - "--health-probe-bind-address=:8081"
             - "--metrics-bind-address=127.0.0.1:8080"
-            - "--leader-elect"
             - "--address=0.0.0.0:8082"
             - "--tls-key-path=/opt/cert/tls.key"
             - "--tls-cert-path=/opt/cert/tls.crt"

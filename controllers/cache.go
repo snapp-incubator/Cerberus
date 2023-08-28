@@ -7,5 +7,5 @@ import (
 )
 
 type ProcessCache interface {
-	UpdateCache(client.Client, context.Context) error
+	UpdateCache(client.Client, context.Context, bool) error
 }

@@ -28,7 +28,7 @@ jobs:
       - uses: little-core-labs/get-git-tag@v3.0.1
         id: tagName
         with:
-          tagRegex: "refs/tags/v(.*)"
+          tagRegex: "v(.*)"
           tagRegexGroup: 1
 
       - uses: docker/metadata-action@v4

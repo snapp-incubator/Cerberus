@@ -6,18 +6,6 @@ metadata:
   name: manager-role
 rules:
   - apiGroups:
-      - ""
-    resources:
-      - secrets
-    verbs:
-      - create
-      - delete
-      - get
-      - list
-      - patch
-      - update
-      - watch
-  - apiGroups:
       - cerberus.snappcloud.io
     resources:
       - accesstokens
@@ -109,3 +97,23 @@ rules:
       - get
       - patch
       - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  creationTimestamp: null
+  name: manager-role
+  namespace: "'cerberus-system'"
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch

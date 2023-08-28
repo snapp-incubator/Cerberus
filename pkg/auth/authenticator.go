@@ -48,7 +48,7 @@ const (
 //+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=webservices/status,verbs=get;
 //+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=webserviceaccountbindings,verbs=get;list;watch;
 //+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=webserviceaccountbindings/status,verbs=get;
-//+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",namespace='cerberus-system',resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
 // TODO add Secrets to be watched
 func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOnly bool) error {
@@ -79,6 +79,7 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 	// TODO find cleaner way to select
 	err = c.List(ctx, secrets,
 		client.MatchingLabels{"cerberus.snappcloud.io/secret": "true"},
+		client.InNamespace("cerberus-system"),
 	)
 	if err != nil {
 		return err

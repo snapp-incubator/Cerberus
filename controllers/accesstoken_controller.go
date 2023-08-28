@@ -58,6 +58,7 @@ func (r *AccessTokenReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *AccessTokenReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// TODO: reconcile on secret change
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&cerberusv1alpha1.AccessToken{}).
 		Complete(r)

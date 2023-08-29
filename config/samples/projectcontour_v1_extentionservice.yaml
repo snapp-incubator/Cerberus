@@ -5,5 +5,5 @@ metadata:
 spec:
   protocol: h2
   services:
-    - name: cerberus
+    - name: cerberus-cerberus
       port: 8082

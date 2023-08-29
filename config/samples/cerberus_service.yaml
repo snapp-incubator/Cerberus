@@ -12,7 +12,7 @@ metadata:
   name: cerberus
 spec:
   ports:
-    - name: https
+    - name: grpc
       port: 8082
       protocol: TCP
       targetPort: grpc

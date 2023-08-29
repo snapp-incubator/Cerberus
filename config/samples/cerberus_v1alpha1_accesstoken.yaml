@@ -5,7 +5,7 @@ metadata:
   labels:
     cerberus.snappcloud.io/secret: "true"
 data:
-  token: c2FsYW1zYWxhbQo=
+  token: c2FsYW1zYWxhbQ==
 ---
 apiVersion: cerberus.snappcloud.io/v1alpha1
 kind: AccessToken
@@ -20,4 +20,4 @@ metadata:
 spec:
   active: Active
   secretRef:
-    name: "sample-access"
+    name: "cerberus-sample-access"

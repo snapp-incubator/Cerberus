@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cerberus-echo-server
+  template:
+    metadata:
+      labels:
+        app: cerberus-echo-server
+    spec:
+      containers:
+        - name: echo-server
+          image: jmalloc/echo-server
+          ports:
+            - name: http-port
+              containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo-service
+spec:
+  ports:
+    - name: http-port
+      port: 80
+      targetPort: http-port
+      protocol: TCP
+  selector:
+    app: cerberus-echo-server

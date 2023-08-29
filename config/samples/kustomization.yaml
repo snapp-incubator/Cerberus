@@ -8,4 +8,5 @@ resources:
   - projectcontour_v1_httpproxy.yaml
   - issuer.yaml
   - cert-manager_cert.yaml
+  - echo_server.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

@@ -19,6 +19,10 @@ spec:
         response: 30s
   virtualhost:
     fqdn: test.cerberus.snappcloud.io
+    tls:
+      minimumProtocolVersion: "1.2"
+      passthrough: false
+      secretName: openshift-ingress/letsencrypt
     authorization:
       extensionRef:
         namespace: cerberus-system

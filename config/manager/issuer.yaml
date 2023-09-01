@@ -4,6 +4,5 @@ metadata:
   labels:
     app.kubernetes.io/instance: cerberus
   name: cerberus-selfsigned-issuer
-  namespace: cerberus-system
 spec:
   selfSigned: {}

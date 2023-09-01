@@ -4,11 +4,10 @@ metadata:
   labels:
     app.kubernetes.io/instance: cerberus
   name: cerberus-serving-cert
-  namespace: cerberus-system
 spec:
   dnsNames:
-    - cerberus-cerberus.cerberus-system.svc
-    - cerberus-cerberus.cerberus-system.svc.cluster.local
+    - cerberus.cerberus-system.svc
+    - cerberus.cerberus-system.svc.cluster.local
   issuerRef:
     kind: Issuer
     name: cerberus-cerberus-selfsigned-issuer

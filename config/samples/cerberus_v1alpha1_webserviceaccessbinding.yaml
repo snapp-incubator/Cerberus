@@ -10,6 +10,6 @@ metadata:
   name: webserviceaccessbinding-sample
 spec:
   subjects:
-    - cerberus-accesstoken-sample
+    - accesstoken-sample
   webservices:
-    - cerberus-webservice-sample
+    - webservice-sample

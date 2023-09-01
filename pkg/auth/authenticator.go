@@ -51,7 +51,6 @@ const (
 //+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=webserviceaccountbindings/status,verbs=get;
 //+kubebuilder:rbac:groups="",namespace='cerberus-system',resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
-// TODO add Secrets to be watched
 func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOnly bool) error {
 	a.updateLock.Lock()
 	defer a.updateLock.Unlock()
@@ -137,7 +136,6 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 	return nil
 }
 
-
 func (a *Authenticator) TestAccess(wsvc string, token string) (bool, CerberusReason, ExtraHeaders) {
 	a.cacheLock.RLock()
 	defer a.cacheLock.RUnlock()
@@ -197,7 +195,7 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response,
 	}
 
 	return &Response{
-		Allow: ok,
+		Allow:    ok,
 		Response: response,
 	}, nil
 }

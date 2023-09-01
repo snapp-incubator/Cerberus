@@ -16,14 +16,15 @@ import "github.com/snapp-incubator/Cerberus/pkg/auth"
 - [type Authenticator](<#Authenticator>)
   - [func NewAuthenticator\(logger logr.Logger\) \(\*Authenticator, error\)](<#NewAuthenticator>)
   - [func \(a \*Authenticator\) Check\(ctx context.Context, request \*Request\) \(\*Response, error\)](<#Authenticator.Check>)
-  - [func \(a \*Authenticator\) TestAccess\(wsvc string, token string\) \(bool, CerberusReason\)](<#Authenticator.TestAccess>)
-  - [func \(a \*Authenticator\) UpdateCache\(c client.Client, ctx context.Context\) error](<#Authenticator.UpdateCache>)
+  - [func \(a \*Authenticator\) TestAccess\(wsvc string, token string\) \(bool, CerberusReason, ExtraHeaders\)](<#Authenticator.TestAccess>)
+  - [func \(a \*Authenticator\) UpdateCache\(c client.Client, ctx context.Context, readOnly bool\) error](<#Authenticator.UpdateCache>)
 - [type CerberusReason](<#CerberusReason>)
 - [type CheckRequestV2](<#CheckRequestV2>)
 - [type CheckRequestV3](<#CheckRequestV3>)
 - [type CheckResponseV2](<#CheckResponseV2>)
 - [type CheckResponseV3](<#CheckResponseV3>)
 - [type Checker](<#Checker>)
+- [type ExtraHeaders](<#ExtraHeaders>)
 - [type Request](<#Request>)
   - [func \(r \*Request\) FromV2\(c \*CheckRequestV2\) \*Request](<#Request.FromV2>)
   - [func \(r \*Request\) FromV3\(c \*CheckRequestV3\) \*Request](<#Request.FromV3>)
@@ -63,7 +64,7 @@ func RunServer(ctx context.Context, listener net.Listener, srv *grpc.Server) err
 RunServer runs the server until signaled by stopChan.
 
 <a name="AccessCache"></a>
-## type [AccessCache](<https://github.com/snapp-incubator/Cerberus/blob/main/pkg/auth/authenticator.go#L25>)
+## type [AccessCache](<https://github.com/snapp-incubator/Cerberus/blob/main/pkg/auth/authenticator.go#L26>)
 
 
 
@@ -72,7 +73,7 @@ type AccessCache map[string]AccessCacheEntry
 ```
 
 <a name="AccessCacheEntry"></a>
-## type [AccessCacheEntry](<https://github.com/snapp-incubator/Cerberus/blob/main/pkg/auth/authenticator.go#L28-L32>)
+## type [AccessCacheEntry](<https://github.com/snapp-incubator/Cerberus/blob/main/pkg/auth/authenticator.go#L29-L33>)
 
 
 
@@ -95,7 +96,7 @@ type Authenticator struct {
 ```
 
 <a name="NewAuthenticator"></a>
-### func [NewAuthenticator](<https://github.com/snapp-incubator/Cerberus/blob/main/pkg/auth/authenticator.go#L193>)
+### func [NewAuthenticator](<https://github.com/snapp-incubator/Cerberus/blob/main/pkg/auth/authenticator.go#L203>)
 
 ```go
 func NewAuthenticator(logger logr.Logger) (*Authenticator, error)
@@ -104,7 +105,7 @@ func NewAuthenticator(logger logr.Logger) (*Authenticator, error)
 
 
 <a name="Authenticator.Check"></a>
-### func \(\*Authenticator\) [Check](<https://github.com/snapp-incubator/Cerberus/blob/main/pkg/auth/authenticator.go#L167>)
+### func \(\*Authenticator\) [Check](<https://github.com/snapp-incubator/Cerberus/blob/main/pkg/auth/authenticator.go#L171>)
 
 ```go
 func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response, error)
@@ -113,10 +114,10 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response,
 
 
 <a name="Authenticator.TestAccess"></a>
-### func \(\*Authenticator\) [TestAccess](<https://github.com/snapp-incubator/Cerberus/blob/main/pkg/auth/authenticator.go#L143>)
+### func \(\*Authenticator\) [TestAccess](<https://github.com/snapp-incubator/Cerberus/blob/main/pkg/auth/authenticator.go#L139>)
 
 ```go
-func (a *Authenticator) TestAccess(wsvc string, token string) (bool, CerberusReason)
+func (a *Authenticator) TestAccess(wsvc string, token string) (bool, CerberusReason, ExtraHeaders)
 ```
 
 
@@ -125,13 +126,13 @@ func (a *Authenticator) TestAccess(wsvc string, token string) (bool, CerberusRea
 ### func \(\*Authenticator\) [UpdateCache](<https://github.com/snapp-incubator/Cerberus/blob/main/pkg/auth/authenticator.go#L54>)
 
 ```go
-func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context) error
+func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOnly bool) error
 ```
 
-TODO add Secrets to be watched
+
 
 <a name="CerberusReason"></a>
-## type [CerberusReason](<https://github.com/snapp-incubator/Cerberus/blob/main/pkg/auth/authenticator.go#L34>)
+## type [CerberusReason](<https://github.com/snapp-incubator/Cerberus/blob/main/pkg/auth/authenticator.go#L35>)
 
 
 
@@ -201,6 +202,15 @@ type Checker interface {
 }
 ```
 
+<a name="ExtraHeaders"></a>
+## type [ExtraHeaders](<https://github.com/snapp-incubator/Cerberus/blob/main/pkg/auth/authenticator.go#L25>)
+
+
+
+```go
+type ExtraHeaders map[string]string
+```
+
 <a name="Request"></a>
 ## type [Request](<https://github.com/snapp-incubator/Cerberus/blob/main/pkg/auth/convert.go#L18-L22>)
 
@@ -263,7 +273,7 @@ func (r *Response) AsV3() *CheckResponseV3
 AsV3 converts to a v3 CheckResponse.
 
 <a name="ServicesCache"></a>
-## type [ServicesCache](<https://github.com/snapp-incubator/Cerberus/blob/main/pkg/auth/authenticator.go#L26>)
+## type [ServicesCache](<https://github.com/snapp-incubator/Cerberus/blob/main/pkg/auth/authenticator.go#L27>)
 
 
 

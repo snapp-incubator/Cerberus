@@ -26,7 +26,7 @@ spec:
     authorization:
       extensionRef:
         namespace: cerberus-system
-        name: cerberus-cerberus-auth
+        name: cerberus-auth
       authPolicy:
         context:
           webservice: cerberus-webservice-sample

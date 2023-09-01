@@ -10,5 +10,5 @@ spec:
     - cerberus.cerberus-system.svc.cluster.local
   issuerRef:
     kind: Issuer
-    name: cerberus-cerberus-selfsigned-issuer
+    name: cerberus-selfsigned-issuer
   secretName: cerberus-server-cert

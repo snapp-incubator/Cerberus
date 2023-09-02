@@ -10,7 +10,7 @@ spec:
       enableWebsockets: false
       permitInsecure: false
       services:
-        - name: cerberus-echo
+        - name: echo
           port: 80
           weight: 100
       timeoutPolicy:

@@ -36,8 +36,10 @@ spec:
             description: WebServiceSpec defines the desired state of WebService
             properties:
               lookupHeader:
+                default: X-Cerberus-Token
                 description: LookupHeader tells Cerberus which header should be used
-                  as Webservice name for the authentication
+                  as the access token for authentication (case-sensitive).
+                pattern: ^(X-[A-Za-z-]*[A-Za-z]|Authorization)$
                 type: string
               upstreamHttpAuth:
                 description: UpstreamHttpAuth tells Cerberus whether it needs to forward

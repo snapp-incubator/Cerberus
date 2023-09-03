@@ -24,7 +24,7 @@ type Authenticator struct {
 
 type ExtraHeaders map[string]string
 type AccessCache map[string]AccessCacheEntry
-type ServicesCache map[string]struct{}
+type ServicesCache map[string]ServicesCacheEntry
 
 type AccessCacheEntry struct {
 	cerberusv1alpha1.AccessToken
@@ -32,15 +32,20 @@ type AccessCacheEntry struct {
 	allowedServices map[string]struct{}
 }
 
+type ServicesCacheEntry struct {
+	cerberusv1alpha1.WebService
+}
+
 type CerberusReason string
 
 const (
-	CerberusReasonOK                 CerberusReason = "ok"
-	CerberusReasonUnauthorized       CerberusReason = "unauthorized"
-	CerberusReasonTokenEmpty         CerberusReason = "token-empty"
-	CerberusReasonLookupEmpty        CerberusReason = "lookup-empty"
-	CerberusReasonTokenNotFound      CerberusReason = "token-notfound"
-	CerberusReasonWebserviceNotFound CerberusReason = "webservice-notfound"
+	CerberusReasonOK                    CerberusReason = "ok"
+	CerberusReasonUnauthorized          CerberusReason = "unauthorized"
+	CerberusReasonTokenEmpty            CerberusReason = "token-empty"
+	CerberusReasonLookupEmpty           CerberusReason = "lookup-empty"
+	CerberusReasonLookupIdentifierEmpty CerberusReason = "lookup-identifier-empty"
+	CerberusReasonTokenNotFound         CerberusReason = "token-notfound"
+	CerberusReasonWebserviceNotFound    CerberusReason = "webservice-notfound"
 )
 
 //+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=accesstokens,verbs=get;list;watch;
@@ -124,7 +129,9 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 
 	newServicesCache := make(ServicesCache)
 	for _, webservice := range webservices.Items {
-		newServicesCache[webservice.Name] = struct{}{}
+		newServicesCache[webservice.Name] = ServicesCacheEntry{
+			WebService: webservice,
+		}
 	}
 
 	a.logger.Info("new access cache", "accessCache", newAccessCache, "servicesCache", newServicesCache)
@@ -168,14 +175,31 @@ func (a *Authenticator) TestAccess(wsvc string, token string) (bool, CerberusRea
 	return true, CerberusReasonOK, newExtraHeaders
 }
 
+func (a *Authenticator) readToken(request *Request) (bool, CerberusReason, string) {
+	wsvc := request.Context["webservice"]
+	res, ok := (*a.servicesCache)[wsvc]
+	if !ok {
+		return false, CerberusReasonWebserviceNotFound, ""
+	}
+	if res.Spec.LookupHeader == "" {
+		return false, CerberusReasonLookupIdentifierEmpty, ""
+	}
+	token := request.Request.Header.Get(res.Spec.LookupHeader)
+	return true, "", token
+}
+
 func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response, error) {
 	wsvc := request.Context["webservice"]
-	token := request.Request.Header.Get("X-Cerberus-Token")
 
-	ok, reason, extraHeaders := a.TestAccess(wsvc, token)
-	a.logger.Info("checking request", "res(ok)", ok, "req", request)
-
+	ok, reason, token := a.readToken(request)
+	var extraHeaders ExtraHeaders
 	var httpStatusCode int
+
+	if ok {
+		ok, reason, extraHeaders = a.TestAccess(wsvc, token)
+	}
+
+	a.logger.Info("checking request", "reason", reason, "req", request)
 	if ok {
 		httpStatusCode = http.StatusOK
 	} else {

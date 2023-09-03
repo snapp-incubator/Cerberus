@@ -29,8 +29,8 @@ type WebServiceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// +kubebuilder:default=X-Cerberus-Token
-	// +kubebuilder:validation:Pattern=^(X-.*|Authorization)$
-	// LookupHeader tells Cerberus which header should be used as access token for the authentication
+	// +kubebuilder:validation:Pattern=^(X-[A-Za-z-]*[A-Za-z]|Authorization)$
+	// LookupHeader tells Cerberus which header should be used as the access token for authentication (case-sensitive).
 	LookupHeader string `json:"lookupHeader,omitempty"`
 
 	// UpstreamHttpAuth tells Cerberus whether it needs to forward

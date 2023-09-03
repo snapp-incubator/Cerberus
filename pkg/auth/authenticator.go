@@ -33,7 +33,7 @@ type AccessCacheEntry struct {
 }
 
 type ServicesCacheEntry struct {
-	cerberusv1alpha1.WebServiceSpec
+	cerberusv1alpha1.WebService
 }
 
 type CerberusReason string
@@ -129,7 +129,7 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 	newServicesCache := make(ServicesCache)
 	for _, webservice := range webservices.Items {
 		newServicesCache[webservice.Name] = ServicesCacheEntry{
-			WebServiceSpec: webservice.Spec,
+			WebService: webservice,
 		}
 	}
 
@@ -176,7 +176,7 @@ func (a *Authenticator) TestAccess(wsvc string, token string) (bool, CerberusRea
 
 func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response, error) {
 	wsvc := request.Context["webservice"]
-	token := request.Request.Header.Get((*a.servicesCache)[wsvc].LookupHeader)
+	token := request.Request.Header.Get((*a.servicesCache)[wsvc].Spec.LookupHeader)
 
 	ok, reason, extraHeaders := a.TestAccess(wsvc, token)
 	a.logger.Info("checking request", "res(ok)", ok, "req", request)

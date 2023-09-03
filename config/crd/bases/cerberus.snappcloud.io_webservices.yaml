@@ -39,7 +39,7 @@ spec:
                 default: X-Cerberus-Token
                 description: LookupHeader tells Cerberus which header should be used
                   as access token for the authentication
-                pattern: ^(X-.*|Authorization)$
+                pattern: ^(X-[A-Za-z-]*[A-Za-z]|Authorization)$
                 type: string
               upstreamHttpAuth:
                 description: UpstreamHttpAuth tells Cerberus whether it needs to forward

@@ -28,6 +28,8 @@ type WebServiceSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// +kubebuilder:default=X-Cerberus-Token
+	// +kubebuilder:validation:Pattern=^(X-.*|Authorization)$
 	// LookupHeader tells Cerberus which header should be used as access token for the authentication
 	LookupHeader string `json:"lookupHeader,omitempty"`
 

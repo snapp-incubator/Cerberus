@@ -24,12 +24,16 @@ type Authenticator struct {
 
 type ExtraHeaders map[string]string
 type AccessCache map[string]AccessCacheEntry
-type ServicesCache map[string]struct{}
+type ServicesCache map[string]ServicesCacheEntry
 
 type AccessCacheEntry struct {
 	cerberusv1alpha1.AccessToken
 	// limiter Limiter
 	allowedServices map[string]struct{}
+}
+
+type ServicesCacheEntry struct {
+	cerberusv1alpha1.WebServiceSpec
 }
 
 type CerberusReason string
@@ -124,7 +128,9 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 
 	newServicesCache := make(ServicesCache)
 	for _, webservice := range webservices.Items {
-		newServicesCache[webservice.Name] = struct{}{}
+		newServicesCache[webservice.Name] = ServicesCacheEntry{
+			WebServiceSpec: webservice.Spec,
+		}
 	}
 
 	a.logger.Info("new access cache", "accessCache", newAccessCache, "servicesCache", newServicesCache)
@@ -170,7 +176,7 @@ func (a *Authenticator) TestAccess(wsvc string, token string) (bool, CerberusRea
 
 func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response, error) {
 	wsvc := request.Context["webservice"]
-	token := request.Request.Header.Get("X-Cerberus-Token")
+	token := request.Request.Header.Get((*a.servicesCache)[wsvc].LookupHeader)
 
 	ok, reason, extraHeaders := a.TestAccess(wsvc, token)
 	a.logger.Info("checking request", "res(ok)", ok, "req", request)

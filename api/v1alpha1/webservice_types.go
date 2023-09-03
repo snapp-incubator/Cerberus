@@ -28,7 +28,7 @@ type WebServiceSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// LookupHeader tells Cerberus which header should be used as Webservice name for the authentication
+	// LookupHeader tells Cerberus which header should be used as access token for the authentication
 	LookupHeader string `json:"lookupHeader,omitempty"`
 
 	// UpstreamHttpAuth tells Cerberus whether it needs to forward

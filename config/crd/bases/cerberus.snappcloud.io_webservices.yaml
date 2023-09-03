@@ -37,7 +37,7 @@ spec:
             properties:
               lookupHeader:
                 description: LookupHeader tells Cerberus which header should be used
-                  as Webservice name for the authentication
+                  as access token for the authentication
                 type: string
               upstreamHttpAuth:
                 description: UpstreamHttpAuth tells Cerberus whether it needs to forward

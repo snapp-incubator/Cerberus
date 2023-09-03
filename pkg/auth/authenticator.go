@@ -177,14 +177,14 @@ func (a *Authenticator) TestAccess(wsvc string, token string) (bool, CerberusRea
 
 func (a *Authenticator) readToken(request *Request) (bool, CerberusReason, string) {
 	wsvc := request.Context["webservice"]
-	_, ok := (*a.servicesCache)[wsvc]
+	res, ok := (*a.servicesCache)[wsvc]
 	if !ok {
 		return false, CerberusReasonWebserviceNotFound, ""
 	}
-	if (*a.servicesCache)[wsvc].Spec.LookupHeader == "" {
+	if res.Spec.LookupHeader == "" {
 		return false, CerberusReasonLookupIdentifierEmpty, ""
 	}
-	token := request.Request.Header.Get((*a.servicesCache)[wsvc].Spec.LookupHeader)
+	token := request.Request.Header.Get(res.Spec.LookupHeader)
 	return true, "", token
 }
 
@@ -197,9 +197,9 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response,
 
 	if ok {
 		ok, reason, extraHeaders = a.TestAccess(wsvc, token)
-		a.logger.Info("checking request", "res(ok)", ok, "req", request)
 	}
 
+	a.logger.Info("checking request", "reason", reason, "req", request)
 	if ok {
 		httpStatusCode = http.StatusOK
 	} else {

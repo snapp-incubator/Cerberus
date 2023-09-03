@@ -39,12 +39,13 @@ type ServicesCacheEntry struct {
 type CerberusReason string
 
 const (
-	CerberusReasonOK                 CerberusReason = "ok"
-	CerberusReasonUnauthorized       CerberusReason = "unauthorized"
-	CerberusReasonTokenEmpty         CerberusReason = "token-empty"
-	CerberusReasonLookupEmpty        CerberusReason = "lookup-empty"
-	CerberusReasonTokenNotFound      CerberusReason = "token-notfound"
-	CerberusReasonWebserviceNotFound CerberusReason = "webservice-notfound"
+	CerberusReasonOK                    CerberusReason = "ok"
+	CerberusReasonUnauthorized          CerberusReason = "unauthorized"
+	CerberusReasonTokenEmpty            CerberusReason = "token-empty"
+	CerberusReasonLookupEmpty           CerberusReason = "lookup-empty"
+	CerberusReasonLookupIdentifierEmpty CerberusReason = "lookup-identifier-empty"
+	CerberusReasonTokenNotFound         CerberusReason = "token-notfound"
+	CerberusReasonWebserviceNotFound    CerberusReason = "webservice-notfound"
 )
 
 //+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=accesstokens,verbs=get;list;watch;
@@ -174,14 +175,31 @@ func (a *Authenticator) TestAccess(wsvc string, token string) (bool, CerberusRea
 	return true, CerberusReasonOK, newExtraHeaders
 }
 
+func (a *Authenticator) lookupHeaderValidator(ctx context.Context, wsvc string) (bool, CerberusReason) {
+	_, ok := (*a.servicesCache)[wsvc]
+	if !ok {
+		return false, CerberusReasonWebserviceNotFound
+	}
+	if (*a.servicesCache)[wsvc].Spec.LookupHeader == "" {
+		return false, CerberusReasonLookupIdentifierEmpty
+	}
+	return true, CerberusReasonOK
+}
+
 func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response, error) {
 	wsvc := request.Context["webservice"]
-	token := request.Request.Header.Get((*a.servicesCache)[wsvc].Spec.LookupHeader)
 
-	ok, reason, extraHeaders := a.TestAccess(wsvc, token)
-	a.logger.Info("checking request", "res(ok)", ok, "req", request)
-
+	ok, reason := a.lookupHeaderValidator(ctx, wsvc)
+	var extraHeaders ExtraHeaders
 	var httpStatusCode int
+
+	if ok {
+		token := request.Request.Header.Get((*a.servicesCache)[wsvc].Spec.LookupHeader)
+
+		ok, reason, extraHeaders = a.TestAccess(wsvc, token)
+		a.logger.Info("checking request", "res(ok)", ok, "req", request)
+	}
+
 	if ok {
 		httpStatusCode = http.StatusOK
 	} else {

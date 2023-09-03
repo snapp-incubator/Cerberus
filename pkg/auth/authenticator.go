@@ -175,27 +175,27 @@ func (a *Authenticator) TestAccess(wsvc string, token string) (bool, CerberusRea
 	return true, CerberusReasonOK, newExtraHeaders
 }
 
-func (a *Authenticator) lookupHeaderValidator(ctx context.Context, wsvc string) (bool, CerberusReason) {
+func (a *Authenticator) readToken(request *Request) (bool, CerberusReason, string) {
+	wsvc := request.Context["webservice"]
 	_, ok := (*a.servicesCache)[wsvc]
 	if !ok {
-		return false, CerberusReasonWebserviceNotFound
+		return false, CerberusReasonWebserviceNotFound, ""
 	}
 	if (*a.servicesCache)[wsvc].Spec.LookupHeader == "" {
-		return false, CerberusReasonLookupIdentifierEmpty
+		return false, CerberusReasonLookupIdentifierEmpty, ""
 	}
-	return true, CerberusReasonOK
+	token := request.Request.Header.Get((*a.servicesCache)[wsvc].Spec.LookupHeader)
+	return true, "", token
 }
 
 func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response, error) {
 	wsvc := request.Context["webservice"]
 
-	ok, reason := a.lookupHeaderValidator(ctx, wsvc)
+	ok, reason, token := a.readToken(request)
 	var extraHeaders ExtraHeaders
 	var httpStatusCode int
 
 	if ok {
-		token := request.Request.Header.Get((*a.servicesCache)[wsvc].Spec.LookupHeader)
-
 		ok, reason, extraHeaders = a.TestAccess(wsvc, token)
 		a.logger.Info("checking request", "res(ok)", ok, "req", request)
 	}

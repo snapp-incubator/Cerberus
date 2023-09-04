@@ -130,7 +130,7 @@ func setupManager(
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "f5d1781e.snappcloud.io",
-		Namespace:              "cerberus-system",
+		Namespace:              "cerberus-operator-system",
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly

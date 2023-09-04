@@ -6,8 +6,8 @@ metadata:
   name: cerberus-serving-cert
 spec:
   dnsNames:
-    - cerberus.cerberus-system.svc
-    - cerberus.cerberus-system.svc.cluster.local
+    - cerberus.cerberus-operator-system.svc
+    - cerberus.cerberus-operator-system.svc.cluster.local
   issuerRef:
     kind: Issuer
     name: cerberus-selfsigned-issuer

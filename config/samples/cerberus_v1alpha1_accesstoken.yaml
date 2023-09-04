@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Secret
 metadata:
-  name: cerberus-system.accesstoken-sample
+  name: cerberus-operator-system.accesstoken-sample
   labels:
     cerberus.snappcloud.io/secret: "true"
 data:
@@ -20,4 +20,4 @@ metadata:
 spec:
   active: Active
   secretRef:
-    name: "cerberus-system.accesstoken-sample"
+    name: "cerberus-operator-system.accesstoken-sample"

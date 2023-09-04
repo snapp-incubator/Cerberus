@@ -9,4 +9,4 @@ metadata:
     app.kubernetes.io/created-by: cerberus
     app.kubernetes.io/part-of: cerberus
     app.kubernetes.io/managed-by: kustomize
-  name: cerberus-system
+  name: cerberus-operator-system

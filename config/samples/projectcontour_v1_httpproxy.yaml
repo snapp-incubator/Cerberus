@@ -25,7 +25,7 @@ spec:
       secretName: openshift-ingress/letsencrypt
     authorization:
       extensionRef:
-        namespace: cerberus-system
+        namespace: cerberus-operator-system
         name: cerberus-auth
       authPolicy:
         context:

@@ -166,7 +166,7 @@ func (a *Authenticator) TestAccess(wsvc string, token string) (bool, CerberusRea
 		return false, CerberusReasonTokenNotFound, newExtraHeaders
 	}
 
-	newExtraHeaders["Access-Token-Name"] = ac.AccessToken.ObjectMeta.Name
+	newExtraHeaders["X-Cerberus-AccessToken"] = ac.AccessToken.ObjectMeta.Name
 
 	if _, ok := (*a.accessCache)[token].allowedServices[wsvc]; !ok {
 		return false, CerberusReasonUnauthorized, newExtraHeaders
@@ -209,8 +209,8 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response,
 	response := http.Response{
 		StatusCode: httpStatusCode,
 		Header: http.Header{
-			"Auth-Handler":    {"cerberus"},
-			"Cerberus-Reason": {string(reason)},
+			"X-Auth-Handler":    {"cerberus"},
+			"X-Cerberus-Reason": {string(reason)},
 		},
 	}
 

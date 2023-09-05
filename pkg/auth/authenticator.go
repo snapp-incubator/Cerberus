@@ -2,7 +2,9 @@ package auth
 
 import (
 	"context"
+	"net"
 	"net/http"
+	"regexp"
 	"sync"
 
 	"github.com/go-logr/logr"
@@ -229,4 +231,33 @@ func NewAuthenticator(logger logr.Logger) (*Authenticator, error) {
 		logger: logger,
 	}
 	return &a, nil
+}
+
+func CheckIP(ip string, ipAllowList []string) (bool, error) {
+	clientIP := net.ParseIP(ip)
+
+	for _, AllowedRangeIP := range ipAllowList {
+		_, subnet, err := net.ParseCIDR(AllowedRangeIP)
+		if err != nil {
+			return false, err
+		}
+
+		if subnet.Contains(clientIP) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func CheckDomain(domain string, domainAllowedList []string) (bool, error) {
+	for _, pattern := range domainAllowedList {
+		matched, err := regexp.MatchString(pattern, domain)
+		if err != nil {
+			return false, err
+		}
+		if matched {
+			return true, nil
+		}
+	}
+	return false, nil
 }

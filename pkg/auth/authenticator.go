@@ -304,7 +304,9 @@ func (a *Authenticator) checkServiceUpstreamAuth(wsvc string, request *Request, 
 	if err != nil {
 		return false, CerberusReasonUpstreamAuthFailed
 	}
-	
+	if resp.StatusCode != http.StatusOK {
+		return false, CerberusReasonUnauthorized
+	}
 	var headersString string
 	for header, values := range resp.Header {
 		for _, value := range values {

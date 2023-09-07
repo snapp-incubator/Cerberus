@@ -277,6 +277,9 @@ func (a *Authenticator) checkServiceUpstreamAuth(wsvc string, request *Request, 
 	if !ok {
 		return false, CerberusReasonWebserviceNotFound
 	}
+	if service.Spec.UpstreamHttpAuth == (cerberusv1alpha1.UpstreamHttpAuthService{}) {
+		return true, CerberusReasonOK
+	}
 	if service.Spec.UpstreamHttpAuth.ReadTokenFrom == "" {
 		return false, CerberusReasonSourceAuthTokenEmpty
 	}

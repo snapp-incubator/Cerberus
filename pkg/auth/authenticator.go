@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"sync"
 
+	"github.com/asaskevich/govalidator"
 	"github.com/go-logr/logr"
 	cerberusv1alpha1 "github.com/snapp-incubator/Cerberus/api/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -15,7 +16,8 @@ import (
 )
 
 type Authenticator struct {
-	logger logr.Logger
+	logger     logr.Logger
+	httpClient *http.Client
 
 	accessCache   *AccessCache
 	servicesCache *ServicesCache
@@ -41,13 +43,17 @@ type ServicesCacheEntry struct {
 type CerberusReason string
 
 const (
-	CerberusReasonOK                    CerberusReason = "ok"
-	CerberusReasonUnauthorized          CerberusReason = "unauthorized"
-	CerberusReasonTokenEmpty            CerberusReason = "token-empty"
-	CerberusReasonLookupEmpty           CerberusReason = "lookup-empty"
-	CerberusReasonLookupIdentifierEmpty CerberusReason = "lookup-identifier-empty"
-	CerberusReasonTokenNotFound         CerberusReason = "token-notfound"
-	CerberusReasonWebserviceNotFound    CerberusReason = "webservice-notfound"
+	CerberusReasonOK                     CerberusReason = "ok"
+	CerberusReasonUnauthorized           CerberusReason = "unauthorized"
+	CerberusReasonTokenEmpty             CerberusReason = "token-empty"
+	CerberusReasonLookupEmpty            CerberusReason = "lookup-empty"
+	CerberusReasonLookupIdentifierEmpty  CerberusReason = "lookup-identifier-empty"
+	CerberusReasonTokenNotFound          CerberusReason = "token-notfound"
+	CerberusReasonWebserviceNotFound     CerberusReason = "webservice-notfound"
+	CerberusReasonInvalidUpstreamAddress CerberusReason = "invalid-auth-upstream"
+	CerberusReasonSourceAuthTokenEmpty   CerberusReason = "upstream-source-identifier-empty"
+	CerberusReasonTargetAuthTokenEmpty   CerberusReason = "upstream-target-identifier-empty"
+	CerberusReasonUpstreamAuthFailed     CerberusReason = "upstream-auth-failed"
 )
 
 //+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=accesstokens,verbs=get;list;watch;
@@ -200,6 +206,9 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response,
 	if ok {
 		ok, reason, extraHeaders = a.TestAccess(wsvc, token)
 	}
+	if ok {
+		ok, reason = a.checkServiceUpstreamAuth(wsvc, request, &extraHeaders)
+	}
 
 	a.logger.Info("checking request", "reason", reason, "req", request)
 	if ok {
@@ -228,7 +237,8 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response,
 
 func NewAuthenticator(logger logr.Logger) (*Authenticator, error) {
 	a := Authenticator{
-		logger: logger,
+		logger:     logger,
+		httpClient: &http.Client{},
 	}
 	return &a, nil
 }
@@ -260,4 +270,48 @@ func CheckDomain(domain string, domainAllowedList []string) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+func (a *Authenticator) checkServiceUpstreamAuth(wsvc string, request *Request, extraHeaders *ExtraHeaders) (bool, CerberusReason) {
+	service, ok := (*a.servicesCache)[wsvc]
+	if !ok {
+		return false, CerberusReasonWebserviceNotFound
+	}
+	if service.Spec.UpstreamHttpAuth.ReadTokenFrom == "" {
+		return false, CerberusReasonSourceAuthTokenEmpty
+	}
+	if service.Spec.UpstreamHttpAuth.WriteTokenTo == "" {
+		return false, CerberusReasonTargetAuthTokenEmpty
+	}
+	if !govalidator.IsRequestURL(service.Spec.UpstreamHttpAuth.Address) {
+		return false, CerberusReasonInvalidUpstreamAddress
+	}
+
+	token := request.Request.Header.Get(service.Spec.UpstreamHttpAuth.ReadTokenFrom)
+
+	// TODO: get http method from webservice crd
+	req, err := http.NewRequest("GET", service.Spec.UpstreamHttpAuth.Address, nil)
+	if err != nil {
+		return false, CerberusReasonUpstreamAuthFailed
+	}
+
+	req.Header = http.Header{
+		service.Spec.UpstreamHttpAuth.WriteTokenTo: {token},
+		"Content-Type": {"application/json"},
+	}
+
+	resp, err := a.httpClient.Do(req)
+	if err != nil {
+		return false, CerberusReasonUpstreamAuthFailed
+	}
+	
+	var headersString string
+	for header, values := range resp.Header {
+		for _, value := range values {
+			headersString += header + ": " + value + "\n"
+		}
+	}
+	(*extraHeaders)["X-Cerberus-Upstream-Headers"] = headersString
+
+	return true, CerberusReasonOK
 }

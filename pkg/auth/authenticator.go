@@ -303,6 +303,8 @@ func (a *Authenticator) checkServiceUpstreamAuth(wsvc string, request *Request, 
 		"Content-Type": {"application/json"},
 	}
 
+	a.httpClient.Timeout = service.Spec.UpstreamHttpAuth.Timeout
+	
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
 		return false, CerberusReasonUpstreamAuthFailed
@@ -325,8 +327,5 @@ func (a *Authenticator) checkServiceUpstreamAuth(wsvc string, request *Request, 
 }
 
 func isEmpty(service cerberusv1alpha1.UpstreamHttpAuthService) bool {
-    if service.Address != "" {
-        return false
-    }
-	return true
+    return service.Address == ""
 }

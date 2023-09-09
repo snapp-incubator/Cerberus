@@ -59,6 +59,12 @@ spec:
                     description: ReadTokenFrom specifies which header contains the
                       upstream Auth token in the request
                     type: string
+                  timeout:
+                    default: 200ms
+                    description: Timeout specifies the duration to wait before timing
+                      out the request to the upstream authentication service.
+                    format: int64
+                    type: integer
                   writeTokenTo:
                     default: Authorization
                     description: WriteTokenTo specifies which header should carry
@@ -66,6 +72,7 @@ spec:
                     type: string
                 required:
                 - readTokenFrom
+                - timeout
                 - writeTokenTo
                 type: object
             type: object

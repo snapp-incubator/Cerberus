@@ -1,0 +1,8 @@
+namespace: cerberus-operator-system
+
+resources:
+  - namespace.yaml
+
+bases:
+  - ../crd
+  - ../rbac

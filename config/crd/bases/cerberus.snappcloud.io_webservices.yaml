@@ -48,6 +48,12 @@ spec:
                   address:
                     description: Address of the upstream authentication service
                     type: string
+                  careHeaders:
+                    description: CareHeaders specifies which headers from the upstream
+                      should be added to the downstream response.
+                    items:
+                      type: string
+                    type: array
                   readTokenFrom:
                     default: Authorization
                     description: ReadTokenFrom specifies which header contains the

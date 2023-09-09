@@ -277,7 +277,7 @@ func (a *Authenticator) checkServiceUpstreamAuth(wsvc string, request *Request, 
 	if !ok {
 		return false, CerberusReasonWebserviceNotFound
 	}
-	if service.Spec.UpstreamHttpAuth == (cerberusv1alpha1.UpstreamHttpAuthService{}) {
+	if isEmpty(service.Spec.UpstreamHttpAuth) {
 		return true, CerberusReasonOK
 	}
 	if service.Spec.UpstreamHttpAuth.ReadTokenFrom == "" {
@@ -310,13 +310,23 @@ func (a *Authenticator) checkServiceUpstreamAuth(wsvc string, request *Request, 
 	if resp.StatusCode != http.StatusOK {
 		return false, CerberusReasonUnauthorized
 	}
-	var headersString string
 	for header, values := range resp.Header {
-		for _, value := range values {
-			headersString += header + ": " + value + "\n"
+		for _, careHeader := range service.Spec.UpstreamHttpAuth.CareHeaders {
+			if header == careHeader {
+				if len(values) > 0 {
+					(*extraHeaders)[header] = values[0]
+				}
+				break 
+			}
 		}
 	}
-	(*extraHeaders)["X-Cerberus-Upstream-Headers"] = headersString
 
 	return true, CerberusReasonOK
+}
+
+func isEmpty(service cerberusv1alpha1.UpstreamHttpAuthService) bool {
+    if service.Address != "" {
+        return false
+    }
+	return true
 }

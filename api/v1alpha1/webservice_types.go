@@ -52,6 +52,10 @@ type UpstreamHttpAuthService struct {
 	// +kubebuilder:default=Authorization
 	// WriteTokenTo specifies which header should carry token to upstream service
 	WriteTokenTo string `json:"writeTokenTo"`
+
+	// CareHeaders specifies which headers from the upstream should be added to the downstream response. 
+	// +optional
+	CareHeaders []string `json:"careHeaders,omitempty"`
 }
 
 // WebServiceStatus defines the observed state of WebService

@@ -4,7 +4,8 @@ import (
 	"context"
 	"net"
 	"net/http"
-	"regexp"
+	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/go-logr/logr"
@@ -251,7 +252,10 @@ func CheckIP(ip string, ipAllowList []string) (bool, error) {
 
 func CheckDomain(domain string, domainAllowedList []string) (bool, error) {
 	for _, pattern := range domainAllowedList {
-		matched, err := regexp.MatchString(pattern, domain)
+		pattern = strings.ToLower(pattern)
+		domain = strings.ToLower(domain)
+
+		matched, err := filepath.Match(pattern, domain)
 		if err != nil {
 			return false, err
 		}

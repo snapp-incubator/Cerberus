@@ -7,7 +7,7 @@ import (
 
 const (
 	CerberusReasonLabel      = "cerberus_reason"
-	CheckRequestVersionLabel = "check-request-version"
+	CheckRequestVersionLabel = "check_request_version"
 	ObjectKindLabel          = "kind"
 
 	MetricsKindSecret                  = "secret"

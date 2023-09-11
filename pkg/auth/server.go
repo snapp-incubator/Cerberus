@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"net"
 	"os"
+	"time"
 
 	envoy_service_auth_v2 "github.com/envoyproxy/go-control-plane/envoy/service/auth/v2"
 	envoy_service_auth_v3 "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
@@ -31,6 +32,8 @@ type authV2 struct {
 }
 
 func (a *authV2) Check(ctx context.Context, check *CheckRequestV2) (*CheckResponseV2, error) {
+	reqStartTime := time.Now()
+
 	request := Request{}
 	request.FromV2(check)
 
@@ -38,8 +41,16 @@ func (a *authV2) Check(ctx context.Context, check *CheckRequestV2) (*CheckRespon
 	if err != nil {
 		return nil, err
 	}
+	final_response := response.AsV2()
 
-	return response.AsV2(), nil
+	// update metrics
+	reason := CerberusReason(response.Response.Header.Get("X-Cerberus-Reason"))
+	labels := ReasonLabel(reason)
+	labels[CheckRequestVersionLabel] = MetricsCheckRequestVersion2
+	reqCount.With(labels).Inc()
+	reqLatency.With(labels).Observe(time.Since(reqStartTime).Seconds())
+
+	return final_response, nil
 }
 
 type authV3 struct {
@@ -47,6 +58,7 @@ type authV3 struct {
 }
 
 func (a *authV3) Check(ctx context.Context, check *CheckRequestV3) (*CheckResponseV3, error) {
+	reqStartTime := time.Now()
 	request := Request{}
 	request.FromV3(check)
 
@@ -54,8 +66,16 @@ func (a *authV3) Check(ctx context.Context, check *CheckRequestV3) (*CheckRespon
 	if err != nil {
 		return nil, err
 	}
+	final_response := response.AsV3()
 
-	return response.AsV3(), nil
+	// update metrics
+	reason := CerberusReason(response.Response.Header.Get("X-Cerberus-Reason"))
+	labels := ReasonLabel(reason)
+	labels[CheckRequestVersionLabel] = MetricsCheckRequestVersion3
+	reqCount.With(labels).Inc()
+	reqLatency.With(labels).Observe(time.Since(reqStartTime).Seconds())
+
+	return final_response, nil
 }
 
 // RegisterServer registers the Checker with the external authorization

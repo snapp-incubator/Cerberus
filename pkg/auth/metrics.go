@@ -6,13 +6,17 @@ import (
 )
 
 const (
-	CerberusReasonLabel = "cerberus_reason"
-	ObjectKindLabel     = "kind"
+	CerberusReasonLabel      = "cerberus_reason"
+	CheckRequestVersionLabel = "check_request_version"
+	ObjectKindLabel          = "kind"
 
 	MetricsKindSecret                  = "secret"
 	MetricsKindWebservice              = "webservice"
 	MetricsKindAccessToken             = "accesstoken"
 	MetricsKindWebserviceAccessBinding = "webserviceaccessbinding"
+
+	MetricsCheckRequestVersion2 = "v2"
+	MetricsCheckRequestVersion3 = "v3"
 )
 
 var (
@@ -24,7 +28,7 @@ var (
 			Name: "check_request_count",
 			Help: "CheckRequest count",
 		},
-		[]string{CerberusReasonLabel},
+		[]string{CerberusReasonLabel, CheckRequestVersionLabel},
 	)
 
 	reqLatency = prometheus.NewHistogramVec(
@@ -77,21 +81,21 @@ var (
 	accessCacheEntries = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "access_cache_entries",
-			Help: "",
+			Help: "Number of entries in Authenticator AccessCache",
 		},
 	)
 
 	webserviceCacheEntries = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "webservice_cache_entries",
-			Help: "",
+			Help: "Number of entries in Authenticator ServicesCache",
 		},
 	)
 
 	fetchObjectListLatency = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "fetch_object_list_latency",
-			Help:    "",
+			Help:    "latency of requsts to kubernetes API server",
 			Buckets: DurationBuckets,
 		},
 		[]string{ObjectKindLabel},

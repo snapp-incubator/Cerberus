@@ -246,6 +246,7 @@ func (a *Authenticator) TestAccess(wsvc string, token string) (bool, CerberusRea
 
 // readToken reads token from given Request object and
 // will return error if it not exists at expected header
+// BUG: TODO: accuire lock before accessing the cache
 func (a *Authenticator) readToken(request *Request) (bool, CerberusReason, string) {
 	wsvc := request.Context["webservice"]
 	res, ok := (*a.servicesCache)[wsvc]

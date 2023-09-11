@@ -49,6 +49,10 @@ const (
 	CerberusReasonLookupIdentifierEmpty CerberusReason = "lookup-identifier-empty"
 	CerberusReasonTokenNotFound         CerberusReason = "token-notfound"
 	CerberusReasonWebserviceNotFound    CerberusReason = "webservice-notfound"
+	CerberusReasonBadDomainList         CerberusReason = "bad-domain-list"
+	CerberusReasonBadIpList             CerberusReason = "bad-ip-list"
+	CerberusReasonDomainNotAllowed      CerberusReason = "domain-not-allowed"
+	CerberusReasonIpNotAllowed          CerberusReason = "ip-not-allowed"
 )
 
 //+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=accesstokens,verbs=get;list;watch;
@@ -146,7 +150,7 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 	return nil
 }
 
-func (a *Authenticator) TestAccess(wsvc string, token string) (bool, CerberusReason, ExtraHeaders) {
+func (a *Authenticator) TestAccess(wsvc string, token string, xForwardedFor string, referrer string) (bool, CerberusReason, ExtraHeaders) {
 	a.cacheLock.RLock()
 	defer a.cacheLock.RUnlock()
 
@@ -169,7 +173,29 @@ func (a *Authenticator) TestAccess(wsvc string, token string) (bool, CerberusRea
 		return false, CerberusReasonTokenNotFound, newExtraHeaders
 	}
 
-	newExtraHeaders["X-Cerberus-AccessToken"] = ac.AccessToken.ObjectMeta.Name
+	// Check x-forwarded-for header against IP allow list
+	if len(ac.Spec.IpAllowList) > 0 && xForwardedFor != "" {
+		ipAllowed, err := CheckIP(xForwardedFor, ac.Spec.IpAllowList)
+		if err != nil {
+			return false, CerberusReasonBadIpList, newExtraHeaders
+		}
+		if !ipAllowed {
+			return false, CerberusReasonIpNotAllowed, newExtraHeaders
+		}
+	}
+
+	// Check referrer header against domain allow list
+	if len(ac.Spec.DomainAllowList) > 0 && referrer != "" {
+		domainAllowed, err := CheckDomain(referrer, ac.Spec.DomainAllowList)
+		if err != nil {
+			return false, CerberusReasonBadDomainList, newExtraHeaders
+		}
+		if !domainAllowed {
+			return false, CerberusReasonDomainNotAllowed, newExtraHeaders
+		}
+	}
+
+	newExtraHeaders["X-Cerberus-AccessToken"] = ac.ObjectMeta.Name
 
 	if _, ok := (*a.accessCache)[token].allowedServices[wsvc]; !ok {
 		return false, CerberusReasonUnauthorized, newExtraHeaders
@@ -198,8 +224,12 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response,
 	var extraHeaders ExtraHeaders
 	var httpStatusCode int
 
+	// Retrieve "x-forwarded-for" and "referrer" headers from the request
+	xForwardedFor := request.Request.Header.Get("x-forwarded-for")
+	referrer := request.Request.Header.Get("referrer")
+
 	if ok {
-		ok, reason, extraHeaders = a.TestAccess(wsvc, token)
+		ok, reason, extraHeaders = a.TestAccess(wsvc, token, xForwardedFor, referrer)
 	}
 
 	a.logger.Info("checking request", "reason", reason, "req", request)

@@ -10,6 +10,7 @@ metadata:
     app.kubernetes.io/created-by: cerberus
     app.kubernetes.io/part-of: cerberus
     app.kubernetes.io/managed-by: kustomize
+    smapp-prometheus: "true"
   name: controller-manager-metrics-monitor
   namespace: system
 spec:

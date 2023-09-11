@@ -1,6 +1,8 @@
 resources:
-  - auth_proxy_service.yaml
   - manager.yaml
   - service.yaml
   - certificate.yaml
   - issuer.yaml
+
+  # kube-rbac-proxy protected metrics are not supported in Cerberus yet
+  # - auth_proxy_service.yaml

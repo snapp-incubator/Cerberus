@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/created-by: cerberus
     app.kubernetes.io/part-of: cerberus
     app.kubernetes.io/managed-by: kustomize
-  name: controller-manager-metrics-service
+  name: cerberus-metrics
   namespace: system
 spec:
   ports:

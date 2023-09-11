@@ -1,5 +1,5 @@
 resources:
-  - auth_proxy_service
+  - auth_proxy_service.yaml
   - manager.yaml
   - service.yaml
   - certificate.yaml

@@ -262,6 +262,7 @@ func (a *Authenticator) readToken(request *Request) (bool, CerberusReason, strin
 
 // Check is the function which is used to Authenticate and Respond to gRPC envoy.CheckRequest
 func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response, error) {
+	reqStartTime := time.Now()
 	wsvc := request.Context["webservice"]
 
 	ok, reason, token := a.readToken(request)
@@ -291,6 +292,10 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response,
 	for key, value := range extraHeaders {
 		response.Header.Add(key, value)
 	}
+
+	// update metrics
+	reqCount.With(ReasonLabel(reason)).Inc()
+	reqLatency.With(ReasonLabel(reason)).Observe(time.Since(reqStartTime).Seconds())
 
 	return &Response{
 		Allow:    ok,

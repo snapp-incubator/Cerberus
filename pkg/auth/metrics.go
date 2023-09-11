@@ -19,7 +19,6 @@ var (
 	DurationBuckets      = []float64{0.00005, .0001, .0005, .001, .002, .005, .01, .05, .1, 1, 2.5, 5, 10}
 	SmallDurationBuckets = []float64{0.0000001, 0.000001, 0.0000025, 0.000005, 0.00001, 0.000025, 0.00005, 0.0001, 0.001, 0.01, 0.05, 0.1}
 
-	//done
 	reqCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "check_request_count",
@@ -28,7 +27,6 @@ var (
 		[]string{CerberusReasonLabel},
 	)
 
-	//done
 	reqLatency = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "check_request_duration_seconds",
@@ -38,7 +36,6 @@ var (
 		[]string{CerberusReasonLabel},
 	)
 
-	// done
 	cacheUpdateCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Name: "cache_updates_count",
@@ -46,7 +43,6 @@ var (
 		},
 	)
 
-	// done
 	cacheUpdateLatency = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "cache_update_duration_seconds",
@@ -55,7 +51,6 @@ var (
 		},
 	)
 
-	// done
 	cacheWriteLockWaitingTime = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "cache_write_lock_waiting_duration_seconds",
@@ -64,16 +59,14 @@ var (
 		},
 	)
 
-	// done
 	cacheWriteTime = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
-			Name:    "cache_write_lock_waiting_duration_seconds",
+			Name:    "cache_write_duration_seconds",
 			Help:    "Writing time lock duration",
 			Buckets: SmallDurationBuckets,
 		},
 	)
 
-	// done
 	cacheReaders = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "cache_read_locks",
@@ -81,7 +74,6 @@ var (
 		},
 	)
 
-	// done
 	accessCacheEntries = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "access_cache_entries",
@@ -89,24 +81,9 @@ var (
 		},
 	)
 
-	accessCacheMemSize = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Name: "access_cache_mem_size_bytes",
-			Help: "",
-		},
-	)
-
-	// done
 	webserviceCacheEntries = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "webservice_cache_entries",
-			Help: "",
-		},
-	)
-
-	webserviceCacheSize = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Name: "webservice_cache_mem_size_bytes",
 			Help: "",
 		},
 	)
@@ -131,9 +108,7 @@ func init() {
 		cacheWriteTime,
 		cacheReaders,
 		accessCacheEntries,
-		accessCacheMemSize,
 		webserviceCacheEntries,
-		webserviceCacheSize,
 		fetchObjectListLatency,
 	)
 }

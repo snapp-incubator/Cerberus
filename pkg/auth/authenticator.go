@@ -135,12 +135,13 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 	if err != nil {
 		return err
 	}
+	listOpts := &client.ListOptions{Namespace: "cerberus-operator-system"}
 
 	t = time.Now()
 	// TODO find cleaner way to select
 	err = c.List(ctx, secrets,
-		client.MatchingLabels{"cerberus.snappcloud.io/secret": "true"},
-		client.InNamespace("cerberus-operator-system"),
+		// client.MatchingLabels{"cerberus.snappcloud.io/secret": "true"},
+		listOpts,
 	)
 	fetchObjectListLatency.With(KindLabel(MetricsKindSecret)).Observe(time.Since(t).Seconds())
 	if err != nil {

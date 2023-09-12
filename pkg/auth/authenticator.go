@@ -150,11 +150,22 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 	return nil
 }
 
-func (a *Authenticator) TestAccess(wsvc string, token string, xForwardedFor string, referrer string) (bool, CerberusReason, ExtraHeaders) {
+func (a *Authenticator) TestAccess(request *Request) (bool, CerberusReason, ExtraHeaders) {
+
+	newExtraHeaders := make(ExtraHeaders)
+
+	ok, reason, token := a.readToken(request)
+	if !ok {
+		return false, reason, newExtraHeaders
+	}
 	a.cacheLock.RLock()
 	defer a.cacheLock.RUnlock()
 
-	newExtraHeaders := make(ExtraHeaders)
+	wsvc := request.Context["webservice"]
+
+	// Retrieve "x-forwarded-for" and "referrer" headers from the request
+	xForwardedFor := request.Request.Header.Get("x-forwarded-for")
+	referrer := request.Request.Header.Get("referrer")
 
 	if wsvc == "" {
 		return false, CerberusReasonLookupEmpty, newExtraHeaders
@@ -200,7 +211,6 @@ func (a *Authenticator) TestAccess(wsvc string, token string, xForwardedFor stri
 	if _, ok := (*a.accessCache)[token].allowedServices[wsvc]; !ok {
 		return false, CerberusReasonUnauthorized, newExtraHeaders
 	}
-
 	return true, CerberusReasonOK, newExtraHeaders
 }
 
@@ -218,19 +228,9 @@ func (a *Authenticator) readToken(request *Request) (bool, CerberusReason, strin
 }
 
 func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response, error) {
-	wsvc := request.Context["webservice"]
 
-	ok, reason, token := a.readToken(request)
-	var extraHeaders ExtraHeaders
+	ok, reason, extraHeaders := a.TestAccess(request)
 	var httpStatusCode int
-
-	// Retrieve "x-forwarded-for" and "referrer" headers from the request
-	xForwardedFor := request.Request.Header.Get("x-forwarded-for")
-	referrer := request.Request.Header.Get("referrer")
-
-	if ok {
-		ok, reason, extraHeaders = a.TestAccess(wsvc, token, xForwardedFor, referrer)
-	}
 
 	a.logger.Info("checking request", "reason", reason, "req", request)
 	if ok {

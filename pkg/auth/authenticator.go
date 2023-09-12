@@ -77,16 +77,25 @@ const (
 	CerberusReasonLookupEmpty CerberusReason = "lookup-empty"
 
 	// CerberusReasonLookupIdentifierEmpty means that requested webservice
-	// does not contain Lookup information in it's manifest
+	// does not contain Lookup information in its manifest
 	CerberusReasonLookupIdentifierEmpty CerberusReason = "lookup-identifier-empty"
 
-	CerberusReasonBadDomainList         CerberusReason = "bad-domain-list"
-	CerberusReasonBadIpList             CerberusReason = "bad-ip-list"
-	CerberusReasonDomainNotAllowed      CerberusReason = "domain-not-allowed"
-	CerberusReasonIpNotAllowed          CerberusReason = "ip-not-allowed"
+	// CerberusReasonBadDomainList means that domain list items are not in valid patterns
+	CerberusReasonBadDomainList CerberusReason = "bad-domain-list"
+
+	// CerberusReasonBadIpList means that ip list items are not in valid patterns which is CIDR notation of the networks
+	CerberusReasonBadIpList CerberusReason = "bad-ip-list"
+
+	// CerberusReasonDomainNotAllowed means that the given domain list
+	//doesn't match with the allowed domain list for specific webservice
+	CerberusReasonDomainNotAllowed CerberusReason = "domain-not-allowed"
+
+	// CerberusReasonIpNotAllowed means that the given ip list
+	//doesn't match with the ip domain list for specific webservice
+	CerberusReasonIpNotAllowed CerberusReason = "ip-not-allowed"
 
 	// CerberusReasonTokenNotFound means that given AccessToken is read
-	// from request headers but it is not listed by the Cerberus
+	// from request headers, but it is not listed by the Cerberus
 	CerberusReasonTokenNotFound CerberusReason = "token-not-found"
 
 	// CerberusReasonWebserviceNotFound means that given webservice in
@@ -214,18 +223,17 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 	return nil
 }
 
-
 // TestAccess will check if given AccessToken (identified by raw token in the request)
 // has access to given Webservice (identified by it's name) and returns proper CerberusReason
 func (a *Authenticator) TestAccess(request *Request) (bool, CerberusReason, ExtraHeaders) {
-  
-  newExtraHeaders := make(ExtraHeaders)
+
+	newExtraHeaders := make(ExtraHeaders)
 
 	ok, reason, token := a.readToken(request)
 	if !ok {
 		return false, reason, newExtraHeaders
 	}
-  
+
 	a.cacheLock.RLock()
 	cacheReaders.Inc()
 	defer a.cacheLock.RUnlock()
@@ -301,7 +309,7 @@ func (a *Authenticator) readToken(request *Request) (bool, CerberusReason, strin
 
 // Check is the function which is used to Authenticate and Respond to gRPC envoy.CheckRequest
 func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response, error) {
-  
+
 	reqStartTime := time.Now()
 
 	ok, reason, extraHeaders := a.TestAccess(request)

@@ -6,6 +6,7 @@
     <img alt="GitHub Workflow Status (with event)" src="https://img.shields.io/github/actions/workflow/status/snapp-incubator/Cerberus/test.yml?style=for-the-badge&logo=github&label=test">
     <img alt="GitHub Workflow Status (with event)" src="https://img.shields.io/github/actions/workflow/status/snapp-incubator/Cerberus/release.yml?style=for-the-badge&logo=github&label=release">
     <img alt="GitHub tag (with filter)" src="https://img.shields.io/github/v/tag/snapp-incubator/Cerberus?style=for-the-badge&logo=git">
+    <img alt="GitHub go.mod Go version (subdirectory of monorepo)" src="https://img.shields.io/github/go-mod/go-version/snapp-incubator/Cerberus?style=for-the-badge&logo=go">
 </p>
 
 

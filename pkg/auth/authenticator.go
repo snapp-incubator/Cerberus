@@ -96,15 +96,15 @@ const (
 
 	// CerberusReasonSourceAuthTokenEmpty means that requested webservice
 	// does not contain source upstream auth lookup header in it's manifest
-	CerberusReasonSourceAuthTokenEmpty   CerberusReason = "upstream-source-identifier-empty"
+	CerberusReasonSourceAuthTokenEmpty CerberusReason = "upstream-source-identifier-empty"
 
 	// CerberusReasonTargetAuthTokenEmpty means that requested webservice
 	// does not contain a target upstream auth lookup header in it's manifest
-	CerberusReasonTargetAuthTokenEmpty   CerberusReason = "upstream-target-identifier-empty"
+	CerberusReasonTargetAuthTokenEmpty CerberusReason = "upstream-target-identifier-empty"
 
 	// CerberusReasonUpstreamAuthFailed means that the request to the specified
 	// upstream failed due to an unidentified issue
-	CerberusReasonUpstreamAuthFailed     CerberusReason = "upstream-auth-failed"
+	CerberusReasonUpstreamAuthFailed CerberusReason = "upstream-auth-failed"
 )
 
 //+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=accesstokens,verbs=get;list;watch;
@@ -229,7 +229,7 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 
 // TestAccess will check if given AccessToken (identified by raw token in the request)
 // has access to given Webservice (identified by it's name) and returns proper CerberusReason
-func (a *Authenticator) TestAccess(wsvc string, token string) (bool, CerberusReason, ExtraHeaders) {
+func (a *Authenticator) TestAccess(wsvc ServicesCacheEntry, token string) (bool, CerberusReason, ExtraHeaders) {
 	a.cacheLock.RLock()
 	cacheReaders.Inc()
 	defer a.cacheLock.RUnlock()
@@ -237,15 +237,8 @@ func (a *Authenticator) TestAccess(wsvc string, token string) (bool, CerberusRea
 
 	newExtraHeaders := make(ExtraHeaders)
 
-	if wsvc == "" {
-		return false, CerberusReasonLookupEmpty, newExtraHeaders
-	}
 	if token == "" {
 		return false, CerberusReasonTokenEmpty, newExtraHeaders
-	}
-
-	if _, ok := (*a.servicesCache)[wsvc]; !ok {
-		return false, CerberusReasonWebserviceNotFound, newExtraHeaders
 	}
 
 	ac, ok := (*a.accessCache)[token]
@@ -256,7 +249,7 @@ func (a *Authenticator) TestAccess(wsvc string, token string) (bool, CerberusRea
 
 	newExtraHeaders["X-Cerberus-AccessToken"] = ac.AccessToken.ObjectMeta.Name
 
-	if _, ok := (*a.accessCache)[token].allowedServices[wsvc]; !ok {
+	if _, ok := (*a.accessCache)[token].allowedServices[wsvc.Name]; !ok {
 		return false, CerberusReasonUnauthorized, newExtraHeaders
 	}
 
@@ -265,18 +258,31 @@ func (a *Authenticator) TestAccess(wsvc string, token string) (bool, CerberusRea
 
 // readToken reads token from given Request object and
 // will return error if it not exists at expected header
-// BUG: TODO: accuire lock before accessing the cache
-func (a *Authenticator) readToken(request *Request) (bool, CerberusReason, string) {
-	wsvc := request.Context["webservice"]
-	res, ok := (*a.servicesCache)[wsvc]
-	if !ok {
-		return false, CerberusReasonWebserviceNotFound, ""
-	}
-	if res.Spec.LookupHeader == "" {
+func (a *Authenticator) readToken(request *Request, wsvc ServicesCacheEntry) (bool, CerberusReason, string) {
+	if wsvc.Spec.LookupHeader == "" {
 		return false, CerberusReasonLookupIdentifierEmpty, ""
 	}
-	token := request.Request.Header.Get(res.Spec.LookupHeader)
+	token := request.Request.Header.Get(wsvc.Spec.LookupHeader)
 	return true, "", token
+}
+
+// readService reads requested webservice from cache and
+// will return error if the object would not be found in cache
+func (a *Authenticator) readService(wsvc string) (bool, CerberusReason, ServicesCacheEntry) {
+	a.cacheLock.RLock()
+	cacheReaders.Inc()
+	defer a.cacheLock.RUnlock()
+	defer cacheReaders.Dec()
+
+	if wsvc == "" {
+		return false, CerberusReasonLookupEmpty, ServicesCacheEntry{}
+	}
+
+	res, ok := (*a.servicesCache)[wsvc]
+	if !ok {
+		return false, CerberusReasonWebserviceNotFound, ServicesCacheEntry{}
+	}
+	return true, "", res
 }
 
 // Check is the function which is used to Authenticate and Respond to gRPC envoy.CheckRequest
@@ -284,15 +290,16 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response,
 	reqStartTime := time.Now()
 	wsvc := request.Context["webservice"]
 
-	ok, reason, token := a.readToken(request)
+	ok, reason, wsvcCacheEntry := a.readService(wsvc)
+	ok, reason, token := a.readToken(request, wsvcCacheEntry)
 	var extraHeaders ExtraHeaders
 	var httpStatusCode int
 
 	if ok {
-		ok, reason, extraHeaders = a.TestAccess(wsvc, token)
+		ok, reason, extraHeaders = a.TestAccess(wsvcCacheEntry, token)
 	}
-	if ok {
-		ok, reason = a.checkServiceUpstreamAuth(wsvc, request, &extraHeaders)
+	if ok && hasUpstreamAuth(wsvcCacheEntry) {
+		ok, reason = a.checkServiceUpstreamAuth(wsvcCacheEntry, request, &extraHeaders)
 	}
 
 	// TODO: remove this line
@@ -371,14 +378,11 @@ func CheckDomain(domain string, domainAllowedList []string) (bool, error) {
 	return false, nil
 }
 
-func (a *Authenticator) checkServiceUpstreamAuth(wsvc string, request *Request, extraHeaders *ExtraHeaders) (bool, CerberusReason) {
-	service, ok := (*a.servicesCache)[wsvc]
-	if !ok {
-		return false, CerberusReasonWebserviceNotFound
-	}
-	if isEmpty(service.Spec.UpstreamHttpAuth) {
-		return true, CerberusReasonOK
-	}
+// checkServiceUpstreamAuth function is designed to validate the request through
+// the upstream authentication for a given webservice
+func (a *Authenticator) checkServiceUpstreamAuth(service ServicesCacheEntry, request *Request, extraHeaders *ExtraHeaders) (bool, CerberusReason) {
+	serviceUpstreamAuthCalls.Inc()
+
 	if service.Spec.UpstreamHttpAuth.ReadTokenFrom == "" {
 		return false, CerberusReasonSourceAuthTokenEmpty
 	}
@@ -403,21 +407,27 @@ func (a *Authenticator) checkServiceUpstreamAuth(wsvc string, request *Request, 
 	}
 
 	a.httpClient.Timeout = service.Spec.UpstreamHttpAuth.Timeout
-	
+	reqStart := time.Now()
 	resp, err := a.httpClient.Do(req)
+	reqDuration := time.Since(reqStart)
 	if err != nil {
 		return false, CerberusReasonUpstreamAuthFailed
 	}
+
+	labels := StatusLabel(resp.StatusCode)
+	upstreamAuthRequestDuration.With(labels).Observe(reqDuration.Seconds())
+
 	if resp.StatusCode != http.StatusOK {
 		return false, CerberusReasonUnauthorized
 	}
+	// add requested careHeaders to extraHeaders for response
 	for header, values := range resp.Header {
 		for _, careHeader := range service.Spec.UpstreamHttpAuth.CareHeaders {
 			if header == careHeader {
 				if len(values) > 0 {
 					(*extraHeaders)[header] = values[0]
 				}
-				break 
+				break
 			}
 		}
 	}
@@ -425,6 +435,8 @@ func (a *Authenticator) checkServiceUpstreamAuth(wsvc string, request *Request, 
 	return true, CerberusReasonOK
 }
 
-func isEmpty(service cerberusv1alpha1.UpstreamHttpAuthService) bool {
-    return service.Address == ""
+// hasUpstreamAuth evaluates whether the provided webservice
+// upstreamauth instance is considered empty or not
+func hasUpstreamAuth(service ServicesCacheEntry) bool {
+	return service.Spec.UpstreamHttpAuth.Address != ""
 }

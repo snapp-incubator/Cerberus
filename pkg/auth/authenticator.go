@@ -289,17 +289,19 @@ func (a *Authenticator) readService(wsvc string) (bool, CerberusReason, Services
 func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response, error) {
 	reqStartTime := time.Now()
 	wsvc := request.Context["webservice"]
-
-	ok, reason, wsvcCacheEntry := a.readService(wsvc)
-	ok, reason, token := a.readToken(request, wsvcCacheEntry)
 	var extraHeaders ExtraHeaders
 	var httpStatusCode int
+	var token string
 
+	ok, reason, wsvcCacheEntry := a.readService(wsvc)
 	if ok {
-		ok, reason, extraHeaders = a.TestAccess(wsvcCacheEntry, token)
-	}
-	if ok && hasUpstreamAuth(wsvcCacheEntry) {
-		ok, reason = a.checkServiceUpstreamAuth(wsvcCacheEntry, request, &extraHeaders)
+		ok, reason, token = a.readToken(request, wsvcCacheEntry)
+		if ok {
+			ok, reason, extraHeaders = a.TestAccess(wsvcCacheEntry, token)
+			if ok && hasUpstreamAuth(wsvcCacheEntry) {
+				ok, reason = a.checkServiceUpstreamAuth(wsvcCacheEntry, request, &extraHeaders)
+			}
+		}
 	}
 
 	// TODO: remove this line

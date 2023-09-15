@@ -1,9 +1,9 @@
 package auth
 
 import (
-	"strconv"
 	"github.com/prometheus/client_golang/prometheus"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
+	"strconv"
 )
 
 const (
@@ -15,7 +15,7 @@ const (
 	MetricsKindWebservice              = "webservice"
 	MetricsKindAccessToken             = "accesstoken"
 	MetricsKindWebserviceAccessBinding = "webserviceaccessbinding"
-	StatusCode						   = "status_code"
+	StatusCode                         = "status_code"
 
 	MetricsCheckRequestVersion2 = "v2"
 	MetricsCheckRequestVersion3 = "v3"
@@ -107,18 +107,16 @@ var (
 		prometheus.CounterOpts{
 			Name: "upstream_auth_calls_total",
 			Help: "The total number of checkServiceUpstreamAuth function calls",
-	})
+		})
 
 	upstreamAuthRequestDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name: "upstream_auth_request_duration_seconds",
-			Help: "Duration of the UpstreamAuth Requests in seconds",
+			Name:    "upstream_auth_request_duration_seconds",
+			Help:    "Duration of the UpstreamAuth Requests in seconds",
 			Buckets: DurationBuckets,
 		},
 		[]string{StatusCode},
 	)
-
-	
 )
 
 func init() {
@@ -150,7 +148,7 @@ func KindLabel(kind string) prometheus.Labels {
 	return labels
 }
 
-func StatusLabel(status int) prometheus.Labels{
+func StatusLabel(status int) prometheus.Labels {
 	labels := prometheus.Labels{}
 	labels[StatusCode] = strconv.Itoa(status)
 	return labels

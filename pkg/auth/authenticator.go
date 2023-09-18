@@ -408,7 +408,7 @@ func (a *Authenticator) checkServiceUpstreamAuth(service ServicesCacheEntry, req
 		"Content-Type": {"application/json"},
 	}
 
-	a.httpClient.Timeout = service.Spec.UpstreamHttpAuth.Timeout
+	a.httpClient.Timeout = time.Duration(service.Spec.UpstreamHttpAuth.Timeout) * time.Millisecond
 	reqStart := time.Now()
 	resp, err := a.httpClient.Do(req)
 	reqDuration := time.Since(reqStart)

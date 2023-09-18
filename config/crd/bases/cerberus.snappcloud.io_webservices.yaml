@@ -60,10 +60,10 @@ spec:
                       upstream Auth token in the request
                     type: string
                   timeout:
-                    default: 200ms
-                    description: Timeout specifies the duration to wait before timing
-                      out the request to the upstream authentication service.
-                    format: int64
+                    default: 200
+                    description: Timeout specifies the milliseconds duration to wait
+                      before timing out the request to the upstream authentication
+                      service.
                     type: integer
                   writeTokenTo:
                     default: Authorization

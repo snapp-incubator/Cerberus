@@ -17,7 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -59,9 +58,9 @@ type UpstreamHttpAuthService struct {
 	// +optional
 	CareHeaders []string `json:"careHeaders,omitempty"`
 
-	// +kubebuilder:default="200ms"
-	// Timeout specifies the duration to wait before timing out the request to the upstream authentication service.
-	Timeout time.Duration `json:"timeout"`
+	// +kubebuilder:default=200
+	// Timeout specifies the milliseconds duration to wait before timing out the request to the upstream authentication service.
+	Timeout int `json:"timeout"`
 }
 
 // WebServiceStatus defines the observed state of WebService

@@ -17,6 +17,8 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"time"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -52,6 +54,14 @@ type UpstreamHttpAuthService struct {
 	// +kubebuilder:default=Authorization
 	// WriteTokenTo specifies which header should carry token to upstream service
 	WriteTokenTo string `json:"writeTokenTo"`
+
+	// CareHeaders specifies which headers from the upstream should be added to the downstream response. 
+	// +optional
+	CareHeaders []string `json:"careHeaders,omitempty"`
+
+	// +kubebuilder:default="200ms"
+	// Timeout specifies the duration to wait before timing out the request to the upstream authentication service.
+	Timeout time.Duration `json:"timeout"`
 }
 
 // WebServiceStatus defines the observed state of WebService

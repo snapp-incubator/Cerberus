@@ -45,11 +45,11 @@ type AccessTokenSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// State shows the state of the token (whether use token or it's just a draft)
+	// State shows the state of the token (whether you use token or it's just a draft)
 	// Valid values are:
 	// - "Active" (default): uses token in authorization procedure
 	// - "Expired": won't include token in authorization procedure
-	// - "Suspended": shows that the token is currently not usable but it may become Active later
+	// - "Suspended": shows that the token is currently not usable, but it may become Active later
 	// +optional
 	State AccessTokenState `json:"active,omitempty"`
 

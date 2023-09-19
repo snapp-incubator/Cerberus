@@ -79,12 +79,26 @@ const (
 	CerberusReasonLookupEmpty CerberusReason = "lookup-empty"
 
 	// CerberusReasonLookupIdentifierEmpty means that requested webservice
-	// does not contain Lookup information in it's manifest
+	// does not contain Lookup information in its manifest
 	CerberusReasonLookupIdentifierEmpty CerberusReason = "lookup-identifier-empty"
 
+	// CerberusReasonBadDomainList means that domain list items are not in valid patterns
+	CerberusReasonBadDomainList CerberusReason = "bad-domain-list"
+
+	// CerberusReasonBadIpList means that ip list items are not in valid patterns which is CIDR notation of the networks
+	CerberusReasonBadIpList CerberusReason = "bad-ip-list"
+
+	// CerberusReasonDomainNotAllowed means that the given domain list
+	//doesn't match with the allowed domain list for specific webservice
+	CerberusReasonDomainNotAllowed CerberusReason = "domain-not-allowed"
+
+	// CerberusReasonIpNotAllowed means that the given ip list
+	//doesn't match with the ip domain list for specific webservice
+	CerberusReasonIpNotAllowed CerberusReason = "ip-not-allowed"
+
 	// CerberusReasonTokenNotFound means that given AccessToken is read
-	// from request headers but it is not listed by the Cerberus
-	CerberusReasonTokenNotFound CerberusReason = "token-notfound"
+	// from request headers, but it is not listed by the Cerberus
+	CerberusReasonTokenNotFound CerberusReason = "token-not-found"
 
 	// CerberusReasonWebserviceNotFound means that given webservice in
 	// the request context is not listed by Cerberus
@@ -228,14 +242,22 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 }
 
 // TestAccess will check if given AccessToken (identified by raw token in the request)
-// has access to given Webservice (identified by it's name) and returns proper CerberusReason
-func (a *Authenticator) TestAccess(wsvc ServicesCacheEntry, token string) (bool, CerberusReason, ExtraHeaders) {
+// has access to given Webservice (identified by its name) and returns proper CerberusReason
+func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (bool, CerberusReason, ExtraHeaders) {
+	newExtraHeaders := make(ExtraHeaders)
+	ok, reason, token := a.readToken(request, wsvc)
+	if !ok {
+		return false, reason, newExtraHeaders
+	}
+
 	a.cacheLock.RLock()
 	cacheReaders.Inc()
 	defer a.cacheLock.RUnlock()
 	defer cacheReaders.Dec()
 
-	newExtraHeaders := make(ExtraHeaders)
+	// Retrieve "x-forwarded-for" and "referrer" headers from the request
+	xForwardedFor := request.Request.Header.Get("x-forwarded-for")
+	referrer := request.Request.Header.Get("referrer")
 
 	if token == "" {
 		return false, CerberusReasonTokenEmpty, newExtraHeaders
@@ -247,12 +269,33 @@ func (a *Authenticator) TestAccess(wsvc ServicesCacheEntry, token string) (bool,
 		return false, CerberusReasonTokenNotFound, newExtraHeaders
 	}
 
-	newExtraHeaders["X-Cerberus-AccessToken"] = ac.AccessToken.ObjectMeta.Name
+	// Check x-forwarded-for header against IP allow list
+	if len(ac.Spec.IpAllowList) > 0 && xForwardedFor != "" {
+		ipAllowed, err := CheckIP(xForwardedFor, ac.Spec.IpAllowList)
+		if err != nil {
+			return false, CerberusReasonBadIpList, newExtraHeaders
+		}
+		if !ipAllowed {
+			return false, CerberusReasonIpNotAllowed, newExtraHeaders
+		}
+	}
+
+	// Check referrer header against domain allow list
+	if len(ac.Spec.DomainAllowList) > 0 && referrer != "" {
+		domainAllowed, err := CheckDomain(referrer, ac.Spec.DomainAllowList)
+		if err != nil {
+			return false, CerberusReasonBadDomainList, newExtraHeaders
+		}
+		if !domainAllowed {
+			return false, CerberusReasonDomainNotAllowed, newExtraHeaders
+		}
+	}
+
+	newExtraHeaders["X-Cerberus-AccessToken"] = ac.ObjectMeta.Name
 
 	if _, ok := (*a.accessCache)[token].allowedServices[wsvc.Name]; !ok {
 		return false, CerberusReasonUnauthorized, newExtraHeaders
 	}
-
 	return true, CerberusReasonOK, newExtraHeaders
 }
 
@@ -287,20 +330,17 @@ func (a *Authenticator) readService(wsvc string) (bool, CerberusReason, Services
 
 // Check is the function which is used to Authenticate and Respond to gRPC envoy.CheckRequest
 func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response, error) {
+
 	reqStartTime := time.Now()
 	wsvc := request.Context["webservice"]
 	var extraHeaders ExtraHeaders
 	var httpStatusCode int
-	var token string
 
 	ok, reason, wsvcCacheEntry := a.readService(wsvc)
 	if ok {
-		ok, reason, token = a.readToken(request, wsvcCacheEntry)
-		if ok {
-			ok, reason, extraHeaders = a.TestAccess(wsvcCacheEntry, token)
-			if ok && hasUpstreamAuth(wsvcCacheEntry) {
-				ok, reason = a.checkServiceUpstreamAuth(wsvcCacheEntry, request, &extraHeaders)
-			}
+		ok, reason, extraHeaders = a.TestAccess(request, wsvcCacheEntry)
+		if ok && hasUpstreamAuth(wsvcCacheEntry) {
+			ok, reason = a.checkServiceUpstreamAuth(wsvcCacheEntry, request, &extraHeaders)
 		}
 	}
 

@@ -48,11 +48,23 @@ spec:
                   address:
                     description: Address of the upstream authentication service
                     type: string
+                  careHeaders:
+                    description: CareHeaders specifies which headers from the upstream
+                      should be added to the downstream response.
+                    items:
+                      type: string
+                    type: array
                   readTokenFrom:
                     default: Authorization
                     description: ReadTokenFrom specifies which header contains the
                       upstream Auth token in the request
                     type: string
+                  timeout:
+                    default: 200
+                    description: Timeout specifies the milliseconds duration to wait
+                      before timing out the request to the upstream authentication
+                      service.
+                    type: integer
                   writeTokenTo:
                     default: Authorization
                     description: WriteTokenTo specifies which header should carry
@@ -60,6 +72,7 @@ spec:
                     type: string
                 required:
                 - readTokenFrom
+                - timeout
                 - writeTokenTo
                 type: object
             type: object

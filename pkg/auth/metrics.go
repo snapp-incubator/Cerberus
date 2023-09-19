@@ -3,6 +3,7 @@ package auth
 import (
 	"github.com/prometheus/client_golang/prometheus"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
+	"strconv"
 )
 
 const (
@@ -14,6 +15,7 @@ const (
 	MetricsKindWebservice              = "webservice"
 	MetricsKindAccessToken             = "accesstoken"
 	MetricsKindWebserviceAccessBinding = "webserviceaccessbinding"
+	StatusCode                         = "status_code"
 
 	MetricsCheckRequestVersion2 = "v2"
 	MetricsCheckRequestVersion3 = "v3"
@@ -100,6 +102,21 @@ var (
 		},
 		[]string{ObjectKindLabel},
 	)
+
+	serviceUpstreamAuthCalls = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "upstream_auth_calls_total",
+			Help: "The total number of checkServiceUpstreamAuth function calls",
+		})
+
+	upstreamAuthRequestDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "upstream_auth_request_duration_seconds",
+			Help:    "Duration of the UpstreamAuth Requests in seconds",
+			Buckets: DurationBuckets,
+		},
+		[]string{StatusCode},
+	)
 )
 
 func init() {
@@ -114,6 +131,8 @@ func init() {
 		accessCacheEntries,
 		webserviceCacheEntries,
 		fetchObjectListLatency,
+		serviceUpstreamAuthCalls,
+		upstreamAuthRequestDuration,
 	)
 }
 
@@ -126,5 +145,11 @@ func ReasonLabel(reason CerberusReason) prometheus.Labels {
 func KindLabel(kind string) prometheus.Labels {
 	labels := prometheus.Labels{}
 	labels[ObjectKindLabel] = kind
+	return labels
+}
+
+func StatusLabel(status int) prometheus.Labels {
+	labels := prometheus.Labels{}
+	labels[StatusCode] = strconv.Itoa(status)
 	return labels
 }

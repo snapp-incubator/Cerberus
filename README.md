@@ -1,6 +1,14 @@
-# cerberus
+<h1 align="center">Cerberus</h1>
 
-![Cerberus](./docs/asssets/imgs/cerberus.webp)
+<p align="center">
+    <img alt="Cerberus" src="./docs/asssets/imgs/cerberus.webp">
+    <br />
+    <img alt="GitHub Workflow Status (with event)" src="https://img.shields.io/github/actions/workflow/status/snapp-incubator/Cerberus/test.yml?style=for-the-badge&logo=github&label=test">
+    <img alt="GitHub Workflow Status (with event)" src="https://img.shields.io/github/actions/workflow/status/snapp-incubator/Cerberus/release.yml?style=for-the-badge&logo=github&label=release">
+    <img alt="GitHub tag (with filter)" src="https://img.shields.io/github/v/tag/snapp-incubator/Cerberus?style=for-the-badge&logo=git">
+    <img alt="GitHub go.mod Go version (subdirectory of monorepo)" src="https://img.shields.io/github/go-mod/go-version/snapp-incubator/Cerberus?style=for-the-badge&logo=go">
+</p>
+
 
 Cerberos is a powerful authorization server designed to seamlessly integrate with Contour by implementing the auth_ext interface of Envoy. In the world of modern application deployment and microservices architecture, ensuring secure and controlled access to services is paramount. Cerberos fills this role by providing a dynamic and flexible access control solution tailored to the unique demands of Contour-based applications.
 

@@ -39,7 +39,7 @@ var (
 			Help:    "CheckRequest durations (response times)",
 			Buckets: DurationBuckets,
 		},
-		[]string{CerberusReasonLabel},
+		[]string{CerberusReasonLabel, CheckRequestVersionLabel},
 	)
 
 	cacheUpdateCount = prometheus.NewCounter(

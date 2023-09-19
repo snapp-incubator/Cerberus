@@ -131,7 +131,7 @@ const (
 
 // UpdateCache will accuire a lock on other UpdateCaches and will start to recreate
 // the entire AccessCache and WebserviceCaches (which contains all authentication informations)
-func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOnly bool) error {
+func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, namespace string, readOnly bool) error {
 	cacheUpdateCount.Inc()
 	cacheUpdateStartTime := time.Now()
 	defer func() {
@@ -146,7 +146,7 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 	secrets := &v1.SecretList{}
 	bindings := &cerberusv1alpha1.WebserviceAccessBindingList{}
 	webservices := &cerberusv1alpha1.WebServiceList{}
-
+		
 	t := time.Now()
 	err = c.List(ctx, tokens)
 	fetchObjectListLatency.With(KindLabel(MetricsKindAccessToken)).Observe(time.Since(t).Seconds())
@@ -173,6 +173,7 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 	// TODO find cleaner way to select
 	err = c.List(ctx, secrets,
 		// client.MatchingLabels{"cerberus.snappcloud.io/secret": "true"},
+		client.InNamespace(namespace),
 		listOpts,
 	)
 	fetchObjectListLatency.With(KindLabel(MetricsKindSecret)).Observe(time.Since(t).Seconds())

@@ -44,7 +44,7 @@ type WebserviceAccessBindingReconciler struct {
 func (r *WebserviceAccessBindingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
-	err := r.Cache.UpdateCache(r.Client, ctx, req.Namespace, r.ReadOnly)
+	err := r.Cache.UpdateCache(r.Client, ctx, r.ReadOnly)
 
 	return ctrl.Result{}, err
 }

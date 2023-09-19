@@ -28,6 +28,8 @@ import (
 
 	"google.golang.org/grpc"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/client-go/rest"
+	controllercache "sigs.k8s.io/controller-runtime/pkg/cache"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -136,7 +138,13 @@ func setupManager(
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "f5d1781e.snappcloud.io",
-		// Namespace:              "cerberus-operator-system",
+		// limit Manager to cerberus namespace
+		NewCache: func(config *rest.Config, opts controllercache.Options) (controllercache.Cache, error) {
+			opts.DefaultNamespaces = map[string]controllercache.Config{
+				"cerberus-operator-system":{},
+			}
+			return controllercache.New(config, opts)
+		}, 
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly

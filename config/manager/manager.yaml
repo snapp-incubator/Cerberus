@@ -20,6 +20,7 @@ spec:
       annotations:
         kubectl.kubernetes.io/default-container: manager
       labels:
+        manager-role: reader
         control-plane: controller-manager
     spec:
       volumes:
@@ -47,6 +48,18 @@ spec:
       #             operator: In
       #             values:
       #               - linux
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: manager-role
+                  operator: In
+                  values:
+                  - reader
+              topologyKey: kubernetes.io/hostname
       containers:
         - command:
             - /manager

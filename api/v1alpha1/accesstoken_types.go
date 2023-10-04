@@ -51,7 +51,7 @@ type AccessTokenSpec struct {
 	// - "Expired": won't include token in authorization procedure
 	// - "Suspended": shows that the token is currently not usable, but it may become Active later
 	// +optional
-	State AccessTokenState `json:"active,omitempty"`
+	State AccessTokenState `json:"state,omitempty"`
 
 	// IP Allow List is a list of IP and IP CIDRs that will be tested against X-Forwarded-For
 	// +optional

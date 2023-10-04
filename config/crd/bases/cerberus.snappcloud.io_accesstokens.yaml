@@ -35,17 +35,6 @@ spec:
           spec:
             description: AccessTokenSpec defines the desired state of AccessToken
             properties:
-              active:
-                description: 'State shows the state of the token (whether use token
-                  or it''s just a draft) Valid values are: - "Active" (default): uses
-                  token in authorization procedure - "Expired": won''t include token
-                  in authorization procedure - "Suspended": shows that the token is
-                  currently not usable but it may become Active later'
-                enum:
-                - Active
-                - Expired
-                - Suspended
-                type: string
               domainAllowList:
                 description: Domain Allow list is a list of Domain glob patterns that
                   will be tested against Referer header
@@ -69,6 +58,17 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
+              state:
+                description: 'State shows the state of the token (whether you use
+                  token or it''s just a draft) Valid values are: - "Active" (default):
+                  uses token in authorization procedure - "Expired": won''t include
+                  token in authorization procedure - "Suspended": shows that the token
+                  is currently not usable, but it may become Active later'
+                enum:
+                - Active
+                - Expired
+                - Suspended
+                type: string
             type: object
           status:
             description: AccessTokenStatus defines the observed state of AccessToken

@@ -146,7 +146,7 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 	secrets := &v1.SecretList{}
 	bindings := &cerberusv1alpha1.WebserviceAccessBindingList{}
 	webservices := &cerberusv1alpha1.WebServiceList{}
-		
+
 	t := time.Now()
 	err = c.List(ctx, tokens)
 	fetchObjectListLatency.With(KindLabel(MetricsKindAccessToken)).Observe(time.Since(t).Seconds())
@@ -343,8 +343,6 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response,
 		}
 	}
 
-	// TODO: remove this line
-	a.logger.Info("checking request", "reason", reason, "req", request)
 	if ok {
 		httpStatusCode = http.StatusOK
 	} else {

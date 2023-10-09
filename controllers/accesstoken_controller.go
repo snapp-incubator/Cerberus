@@ -19,10 +19,16 @@ package controllers
 import (
 	"context"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	cerberusv1alpha1 "github.com/snapp-incubator/Cerberus/api/v1alpha1"
 )
@@ -49,10 +55,39 @@ func (r *AccessTokenReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	return ctrl.Result{}, err
 }
 
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *AccessTokenReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// TODO: reconcile on secret change
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&cerberusv1alpha1.AccessToken{}).
-		Complete(r)
+
+	labelPredicate := predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			_, hasLabel := e.ObjectNew.GetLabels()["cerberus.snappcloud.io/secret"]
+			return hasLabel
+		},
+		CreateFunc: func(e event.CreateEvent) bool {
+			_, hasLabel := e.Object.GetLabels()["cerberus.snappcloud.io/secret"]
+			return hasLabel
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			_, hasLabel := e.Object.GetLabels()["cerberus.snappcloud.io/secret"]
+			return hasLabel
+		},
+	}
+
+
+	if err := ctrl.NewControllerManagedBy(mgr).
+	For(&cerberusv1alpha1.AccessToken{}).
+	Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(mapSecretMapFunc), builder.WithPredicates(labelPredicate)).
+	Complete(r); err != nil {
+	return err
+	}
+
+	return nil
+}
+
+
+func mapSecretMapFunc(ctx context.Context, a client.Object) []reconcile.Request {
+	return []reconcile.Request{
+		{NamespacedName: client.ObjectKey{Name: a.GetName(), Namespace: a.GetNamespace()}},
+	}
 }

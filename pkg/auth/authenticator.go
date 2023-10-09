@@ -189,7 +189,7 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 	}
 
 	accessTokenRawValue := func(t *cerberusv1alpha1.AccessToken) (string, bool) {
-		if t, ok := secretValues[t.Spec.TokenSecretRef.Name]; ok {
+		if t, ok := secretValues[t.Namespace+"."+t.Name]; ok {
 			return t, ok
 		}
 		return "", false

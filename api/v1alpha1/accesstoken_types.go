@@ -84,7 +84,7 @@ type AccessToken struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   AccessTokenSpec   `json:"spec,omitempty"`
-	Status AccessTokenStatus `json:"status,omitempty"`
+	Active AccessTokenStatus `json:"active,omitempty"`
 }
 
 //+kubebuilder:object:root=true

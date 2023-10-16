@@ -7,6 +7,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"net/http"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"testing"
 
@@ -135,9 +136,46 @@ func TestCheckDomainComplex(t *testing.T) {
 	}
 }
 
+func TestReadToken(t *testing.T) {
+
+	authenticator := &Authenticator{}
+
+	request := &Request{
+		Request: http.Request{
+			Header: http.Header{},
+		},
+	}
+
+	webservice := ServicesCacheEntry{
+		cerberusv1alpha1.WebService{
+			Spec: cerberusv1alpha1.WebServiceSpec{
+				LookupHeader: "X-Cerberus-Token",
+			},
+		},
+	}
+
+	request.Request.Header.Set("X-Cerberus-Token", "test-token")
+
+	ok, reason, token := authenticator.readToken(request, webservice)
+
+	if !ok {
+		t.Errorf("Expected token to be read successfully.")
+	}
+
+	if reason != "" {
+		t.Errorf("Expected reason to be empty.")
+	}
+
+	if token != "test-token" {
+		t.Errorf("Expected token to be 'test-token'. Got: %s", token)
+	}
+}
+
 func TestUpdateCache(t *testing.T) {
+	// Create a fake Kubernetes client and an Authenticator instance.
 	fakeClient, authenticator := setupTestEnvironment(t)
 
+	// Create and prepare mock data for Kubernetes resources.
 	accessTokens := prepareAccessTokens(2)
 	bindings := prepareWebserviceAccessBindings(2)
 	webservices := prepareWebservices(2)
@@ -148,10 +186,13 @@ func TestUpdateCache(t *testing.T) {
 	createWebservices(t, fakeClient, webservices[0], webservices[1])
 	createSecrets(t, fakeClient, secrets[0], secrets[1])
 
+	// Call the UpdateCache function.
 	err := authenticator.UpdateCache(fakeClient, context.Background(), false)
 
+	// Check if the cache update was successful.
 	assert.NoError(t, err)
 
+	// Assert that the caches have been populated correctly.
 	assertCachesPopulated(t, authenticator)
 }
 
@@ -248,13 +289,6 @@ func prepareSecrets(count int) []v1.Secret {
 	return secrets
 }
 
-//func createResources(t *testing.T, fakeClient client.Client, resources ...client.Object) {
-//	ctx := context.Background()
-//	for _, resource := range resources {
-//		assert.NoError(t, fakeClient.Create(ctx, resource))
-//	}
-//}
-
 func createAccessTokens(t *testing.T, fakeClient client.Client, accessTokens ...cerberusv1alpha1.AccessToken) {
 	ctx := context.Background()
 	for _, token := range accessTokens {
@@ -287,6 +321,7 @@ func assertCachesPopulated(t *testing.T, authenticator *Authenticator) {
 	authenticator.cacheLock.RLock()
 	defer authenticator.cacheLock.RUnlock()
 
+	//TODO: check this error
 	//assert.NotEmpty(t, authenticator.accessCache)
 	assert.NotEmpty(t, authenticator.servicesCache)
 }

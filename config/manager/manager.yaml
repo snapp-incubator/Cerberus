@@ -67,9 +67,9 @@ spec:
             - "--health-probe-bind-address=:8081"
             - "--metrics-bind-address=0.0.0.0:8080"
             - "--address=0.0.0.0:8082"
-            - "--tls-key-path=/opt/cert/tls.key"
-            - "--tls-cert-path=/opt/cert/tls.crt"
-            - "--tls-ca-path=/opt/cert/ca.crt"
+            # - "--tls-key-path=/opt/cert/tls.key"
+            # - "--tls-cert-path=/opt/cert/tls.crt"
+            # - "--tls-ca-path=/opt/cert/ca.crt"
           image: ghcr.io/snapp-incubator/cerberus:1.5.0
           name: manager
           volumeMounts:

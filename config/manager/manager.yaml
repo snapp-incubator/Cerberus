@@ -97,10 +97,10 @@ spec:
             periodSeconds: 10
           resources:
             limits:
-              cpu: 3
+              cpu: 4
               memory: 2Gi
             requests:
-              cpu: 3
+              cpu: 4
               memory: 2Gi
       serviceAccountName: cerberus-controller-manager
       terminationGracePeriodSeconds: 10

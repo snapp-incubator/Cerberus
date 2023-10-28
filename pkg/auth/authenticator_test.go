@@ -47,28 +47,28 @@ func generateDomainAllowList(size int) []string {
 }
 
 func generateTokenSecretRef() *corev1.LocalObjectReference {
-	example := &corev1.LocalObjectReference{Name: "expmle"}
+	example := &corev1.LocalObjectReference{Name: "example-token-secret-ref"}
 	return example
 }
 
 func generateSubjects(subjectCount int) []string {
-	subjects := make([]string, subjectCount)
+	subject := make([]string, subjectCount)
 
 	for i := 0; i < subjectCount; i++ {
-		subjects[i] = fmt.Sprintf("subject-%d", i+1)
+		subject[i] = fmt.Sprintf("subject-%d", i+1)
 	}
 
-	return subjects
+	return subject
 }
 
 func generateWebservices(webserviceCount int) []string {
-	webservices := make([]string, webserviceCount)
+	webservice := make([]string, webserviceCount)
 
 	for i := 0; i < webserviceCount; i++ {
-		webservices[i] = fmt.Sprintf("webservice-%d", i+1)
+		webservice[i] = fmt.Sprintf("webservice-%d", i+1)
 	}
 
-	return webservices
+	return webservice
 }
 
 func BenchmarkCheckIPWithLargeInput(b *testing.B) {
@@ -136,6 +136,63 @@ func TestCheckDomainComplex(t *testing.T) {
 	}
 }
 
+func TestReadService(t *testing.T) {
+	authenticator := &Authenticator{
+		accessCache:   &AccessCache{},
+		servicesCache: &ServicesCache{},
+	}
+
+	request := &Request{
+		Context: map[string]string{
+			"webservice": "SampleWebService",
+		},
+		Request: http.Request{
+			Header: http.Header{},
+		},
+	}
+
+	// Create a test WebserviceCacheEntry
+	webservice := ServicesCacheEntry{
+		cerberusv1alpha1.WebService{
+			Spec: cerberusv1alpha1.WebServiceSpec{
+				LookupHeader: "X-Cerberus-Token",
+			},
+		},
+	}
+
+	(*authenticator.servicesCache)["SampleWebService"] = webservice
+
+	request.Request.Header.Set("X-Cerberus-Token", "test-token")
+
+	wsvc := request.Context["webservice"]
+
+	testCases := []struct {
+		wsvc               string
+		expectedOk         bool
+		expectedReason     CerberusReason
+		expectedCacheEntry ServicesCacheEntry
+	}{
+		{wsvc, true, "", webservice},
+
+		{"nonexistent_service", false, CerberusReasonWebserviceNotFound, ServicesCacheEntry{}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.wsvc, func(t *testing.T) {
+			ok, reason, _ := authenticator.readService(tc.wsvc)
+			if ok != tc.expectedOk {
+				t.Errorf("Expected success: %v, Got: %v", tc.expectedOk, ok)
+			}
+			if reason != tc.expectedReason {
+				t.Errorf("Expected reason: %v, Got: %v", tc.expectedReason, reason)
+			}
+			if ok {
+				//TODO: Check cache entry fields, e.g., cacheEntry.SomeField
+			}
+		})
+	}
+}
+
 func TestReadToken(t *testing.T) {
 
 	authenticator := &Authenticator{}
@@ -146,6 +203,7 @@ func TestReadToken(t *testing.T) {
 		},
 	}
 
+	// Create a test WebserviceCacheEntry
 	webservice := ServicesCacheEntry{
 		cerberusv1alpha1.WebService{
 			Spec: cerberusv1alpha1.WebServiceSpec{
@@ -221,14 +279,15 @@ func setupTestEnvironment(t *testing.T) (client.Client, *Authenticator) {
 }
 
 func prepareAccessTokens(count int) []cerberusv1alpha1.AccessToken {
+
 	// Create and prepare access tokens with unique names.
 	accessTokens := make([]cerberusv1alpha1.AccessToken, count)
 	for i := 0; i < count; i++ {
 		tokenName := fmt.Sprintf("test-token-%d", i)
 		accessTokens[i] = cerberusv1alpha1.AccessToken{
-			ObjectMeta: metav1.ObjectMeta{Name: tokenName, Namespace: "default"},
+			ObjectMeta: metav1.ObjectMeta{Name: tokenName},
 			Spec: cerberusv1alpha1.AccessTokenSpec{
-				State:           "",
+				State:           "active",
 				IpAllowList:     ipAllowList,
 				DomainAllowList: domainAllowList,
 				TokenSecretRef:  tokenSecretRef,

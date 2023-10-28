@@ -42,7 +42,7 @@ type AccessCache map[string]AccessCacheEntry
 // Webservices by the Authenticator
 type ServicesCache map[string]ServicesCacheEntry
 
-// AccessCacheEntry will hold all datas included in AccessToken manifest
+// AccessCacheEntry will hold all datas included in AccessToken manifest,
 // and it also holds a map[string]struct{} which holds name of Webservices
 // which the given token has access to.
 type AccessCacheEntry struct {

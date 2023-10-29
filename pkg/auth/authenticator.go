@@ -332,6 +332,7 @@ func (a *Authenticator) readService(wsvc string) (bool, CerberusReason, Services
 func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response, error) {
 
 	wsvc := request.Context["webservice"]
+	request.Context[HasUpstreamAuth] = "false"
 	var extraHeaders ExtraHeaders
 	var httpStatusCode int
 
@@ -339,6 +340,7 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response,
 	if ok {
 		ok, reason, extraHeaders = a.TestAccess(request, wsvcCacheEntry)
 		if ok && hasUpstreamAuth(wsvcCacheEntry) {
+			request.Context[HasUpstreamAuth] = "true"
 			ok, reason = a.checkServiceUpstreamAuth(wsvcCacheEntry, request, &extraHeaders)
 		}
 	}

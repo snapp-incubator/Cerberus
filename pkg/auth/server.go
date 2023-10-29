@@ -46,6 +46,8 @@ func (a *authV2) Check(ctx context.Context, check *CheckRequestV2) (*CheckRespon
 	// update metrics
 	reason := CerberusReason(response.Response.Header.Get("X-Cerberus-Reason"))
 	labels := ReasonLabel(reason)
+	labels = UpstreamAuthLabel(labels, request.Context[HasUpstreamAuth])
+
 	labels[CheckRequestVersionLabel] = MetricsCheckRequestVersion2
 	reqCount.With(labels).Inc()
 	reqLatency.With(labels).Observe(time.Since(reqStartTime).Seconds())

@@ -9,6 +9,7 @@ import (
 const (
 	CerberusReasonLabel      = "cerberus_reason"
 	CheckRequestVersionLabel = "check_request_version"
+	HasUpstreamAuth		     = "upstream_auth_enabled"
 	ObjectKindLabel          = "kind"
 
 	MetricsKindSecret                  = "secret"
@@ -22,7 +23,7 @@ const (
 )
 
 var (
-	DurationBuckets      = []float64{0.000005, 0.00001, 0.000015, 0.00003, 0.00004, 0.00005, 0.000075, 0.0001, 0.00025, .0005, .001, .002, .003, .004, .005, .006, .007, .008, .009, .01, .02, .05, .1, 1, 2.5, 5}
+	DurationBuckets      = []float64{0.000005, 0.00001, 0.000015, 0.00003, 0.00004, 0.00005, 0.000075, 0.0001, 0.000125, 0.00015, 0.000175, 0.0002,  0.00025, .0005, .001, .002, .003, .004, .005, .006, .007, .008, .009, .01, .02, .05, .1, 1, 2.5, 5}
 	SmallDurationBuckets = []float64{0.0000001, 0.000001, 0.0000025, 0.000005, 0.00001, 0.000025, 0.00005, 0.0001, 0.001, 0.01, 0.05, 0.1}
 
 	reqCount = prometheus.NewCounterVec(
@@ -30,7 +31,7 @@ var (
 			Name: "check_request_count",
 			Help: "CheckRequest count",
 		},
-		[]string{CerberusReasonLabel, CheckRequestVersionLabel},
+		[]string{CerberusReasonLabel, CheckRequestVersionLabel, HasUpstreamAuth},
 	)
 
 	reqLatency = prometheus.NewHistogramVec(
@@ -39,7 +40,7 @@ var (
 			Help:    "CheckRequest durations (response times)",
 			Buckets: DurationBuckets,
 		},
-		[]string{CerberusReasonLabel, CheckRequestVersionLabel},
+		[]string{CerberusReasonLabel, CheckRequestVersionLabel, HasUpstreamAuth},
 	)
 
 	cacheUpdateCount = prometheus.NewCounter(
@@ -136,20 +137,34 @@ func init() {
 	)
 }
 
-func ReasonLabel(reason CerberusReason) prometheus.Labels {
-	labels := prometheus.Labels{}
+func AddReasonLabel(labels prometheus.Labels, reason CerberusReason) prometheus.Labels {
+	if labels == nil {
+		labels = prometheus.Labels{}
+	}
 	labels[CerberusReasonLabel] = string(reason)
 	return labels
 }
 
-func KindLabel(kind string) prometheus.Labels {
-	labels := prometheus.Labels{}
+func AddKindLabel(labels prometheus.Labels, kind string) prometheus.Labels {
+	if labels == nil {
+		labels = prometheus.Labels{}
+	}
 	labels[ObjectKindLabel] = kind
 	return labels
 }
 
-func StatusLabel(status int) prometheus.Labels {
-	labels := prometheus.Labels{}
+func AddStatusLabel(labels prometheus.Labels, status int) prometheus.Labels {
+	if labels == nil {
+		labels = prometheus.Labels{}
+	}
 	labels[StatusCode] = strconv.Itoa(status)
+	return labels
+}
+
+func AddUpstreamAuthLabel(labels prometheus.Labels, hasUpstreamAuth string) prometheus.Labels {
+	if labels == nil {
+		labels = prometheus.Labels{}
+	}
+	labels[HasUpstreamAuth] = hasUpstreamAuth
 	return labels
 }

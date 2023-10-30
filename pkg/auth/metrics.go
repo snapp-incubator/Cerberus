@@ -137,25 +137,31 @@ func init() {
 	)
 }
 
-func ReasonLabel(reason CerberusReason) prometheus.Labels {
-	labels := prometheus.Labels{}
+func AddReasonLabel(labels prometheus.Labels, reason CerberusReason) prometheus.Labels {
+	if labels == nil {
+		labels = prometheus.Labels{}
+	}
 	labels[CerberusReasonLabel] = string(reason)
 	return labels
 }
 
-func KindLabel(kind string) prometheus.Labels {
-	labels := prometheus.Labels{}
+func AddKindLabel(labels prometheus.Labels, kind string) prometheus.Labels {
+	if labels == nil {
+		labels = prometheus.Labels{}
+	}
 	labels[ObjectKindLabel] = kind
 	return labels
 }
 
-func StatusLabel(status int) prometheus.Labels {
-	labels := prometheus.Labels{}
+func AddStatusLabel(labels prometheus.Labels, status int) prometheus.Labels {
+	if labels == nil {
+		labels = prometheus.Labels{}
+	}
 	labels[StatusCode] = strconv.Itoa(status)
 	return labels
 }
 
-func UpstreamAuthLabel(labels prometheus.Labels, hasUpstreamAuth string) prometheus.Labels {
+func AddUpstreamAuthLabel(labels prometheus.Labels, hasUpstreamAuth string) prometheus.Labels {
 	if labels == nil {
 		labels = prometheus.Labels{}
 	}

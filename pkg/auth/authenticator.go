@@ -149,21 +149,21 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 
 	t := time.Now()
 	err = c.List(ctx, tokens)
-	fetchObjectListLatency.With(KindLabel(MetricsKindAccessToken)).Observe(time.Since(t).Seconds())
+	fetchObjectListLatency.With(AddKindLabel(nil, MetricsKindAccessToken)).Observe(time.Since(t).Seconds())
 	if err != nil {
 		return err
 	}
 
 	t = time.Now()
 	err = c.List(ctx, bindings)
-	fetchObjectListLatency.With(KindLabel(MetricsKindWebserviceAccessBinding)).Observe(time.Since(t).Seconds())
+	fetchObjectListLatency.With(AddKindLabel(nil, MetricsKindWebserviceAccessBinding)).Observe(time.Since(t).Seconds())
 	if err != nil {
 		return err
 	}
 
 	t = time.Now()
 	err = c.List(ctx, webservices)
-	fetchObjectListLatency.With(KindLabel(MetricsKindWebservice)).Observe(time.Since(t).Seconds())
+	fetchObjectListLatency.With(AddKindLabel(nil, MetricsKindWebservice)).Observe(time.Since(t).Seconds())
 	if err != nil {
 		return err
 	}
@@ -175,7 +175,7 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 		// client.MatchingLabels{"cerberus.snappcloud.io/secret": "true"},
 		listOpts,
 	)
-	fetchObjectListLatency.With(KindLabel(MetricsKindSecret)).Observe(time.Since(t).Seconds())
+	fetchObjectListLatency.With(AddKindLabel(nil, MetricsKindSecret)).Observe(time.Since(t).Seconds())
 	if err != nil {
 		return err
 	}
@@ -451,7 +451,7 @@ func (a *Authenticator) checkServiceUpstreamAuth(service ServicesCacheEntry, req
 		return false, CerberusReasonUpstreamAuthFailed
 	}
 
-	labels := StatusLabel(resp.StatusCode)
+	labels := AddStatusLabel(nil, resp.StatusCode)
 	upstreamAuthRequestDuration.With(labels).Observe(reqDuration.Seconds())
 
 	if resp.StatusCode != http.StatusOK {

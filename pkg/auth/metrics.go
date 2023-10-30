@@ -9,7 +9,7 @@ import (
 const (
 	CerberusReasonLabel      = "cerberus_reason"
 	CheckRequestVersionLabel = "check_request_version"
-	HasUpstreamAuth		     = "has_upstream_auth"
+	HasUpstreamAuth		     = "upstream_auth_enabled"
 	ObjectKindLabel          = "kind"
 
 	MetricsKindSecret                  = "secret"

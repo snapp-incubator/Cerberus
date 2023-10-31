@@ -154,6 +154,7 @@ func TestReadService(t *testing.T) {
 	// Create a test WebserviceCacheEntry
 	webservice := ServicesCacheEntry{
 		cerberusv1alpha1.WebService{
+
 			Spec: cerberusv1alpha1.WebServiceSpec{
 				LookupHeader: "X-Cerberus-Token",
 			},
@@ -173,7 +174,6 @@ func TestReadService(t *testing.T) {
 		expectedCacheEntry ServicesCacheEntry
 	}{
 		{wsvc, true, "", webservice},
-
 		{"nonexistent_service", false, CerberusReasonWebserviceNotFound, ServicesCacheEntry{}},
 	}
 
@@ -252,6 +252,55 @@ func TestUpdateCache(t *testing.T) {
 
 	// Assert that the caches have been populated correctly.
 	assertCachesPopulated(t, authenticator)
+}
+
+func TestTestAccessValidToken(t *testing.T) {
+	authenticator := &Authenticator{
+		accessCache:   &AccessCache{},
+		servicesCache: &ServicesCache{},
+	}
+
+	tokenEntry := AccessCacheEntry{
+		AccessToken: cerberusv1alpha1.AccessToken{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "valid-token",
+			},
+		},
+		allowedServices: map[string]struct{}{
+			"SampleWebService": {},
+		},
+	}
+	(*authenticator.accessCache)["valid-token"] = tokenEntry
+
+	headers := http.Header{}
+	headers.Set("X-Cerberus-Token", "valid-token")
+
+	request := &Request{
+		Context: map[string]string{
+			"webservice": "SampleWebService",
+		},
+		Request: http.Request{
+			Header: headers,
+		},
+	}
+
+	webservice := ServicesCacheEntry{
+		cerberusv1alpha1.WebService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "SampleWebService",
+			},
+			Spec: cerberusv1alpha1.WebServiceSpec{
+				LookupHeader: "X-Cerberus-Token",
+			},
+		},
+	}
+	(*authenticator.servicesCache)["SampleWebService"] = webservice
+
+	ok, reason, extraHeaders := authenticator.TestAccess(request, webservice)
+
+	assert.True(t, ok, "Expected access to be granted")
+	assert.Equal(t, CerberusReasonOK, reason, "Expected reason to be OK")
+	assert.Equal(t, "valid-token", extraHeaders["X-Cerberus-AccessToken"], "Expected token in extraHeaders")
 }
 
 func setupTestEnvironment(t *testing.T) (client.Client, *Authenticator) {

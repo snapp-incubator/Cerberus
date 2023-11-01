@@ -85,6 +85,12 @@ const (
 	// CerberusReasonBadDomainList means that domain list items are not in valid patterns
 	CerberusReasonBadDomainList CerberusReason = "bad-domain-list"
 
+	// CerberusReasonInvalidSourceIp means that source ip in remoteAddre is not valid
+	CerberusReasonInvalidSourceIp CerberusReason = "invalid-source-ip"
+
+	// CerberusReasonBadIpList means that there is no valid public ip for validation
+	CerberusReasonNoValidIp CerberusReason = "no-valid-ip"
+
 	// CerberusReasonBadIpList means that ip list items are not in valid patterns which is CIDR notation of the networks
 	CerberusReasonBadIpList CerberusReason = "bad-ip-list"
 
@@ -255,8 +261,22 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 	defer a.cacheLock.RUnlock()
 	defer cacheReaders.Dec()
 
+	ipList := make([]string, 0)
+
+	// Retrieve "remoteAddr" from the requeset
+	remoteAddr := request.Request.RemoteAddr
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		return false, CerberusReasonInvalidSourceIp, newExtraHeaders
+	}
+	ipList = append(ipList, host)
+
 	// Retrieve "x-forwarded-for" and "referrer" headers from the request
 	xForwardedFor := request.Request.Header.Get("x-forwarded-for")
+	if xForwardedFor != "" {
+		ips := strings.Split(xForwardedFor, ", ")
+		ipList = append(ipList, ips...)
+	}
 	referrer := request.Request.Header.Get("referrer")
 
 	if token == "" {
@@ -270,8 +290,12 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 	}
 
 	// Check x-forwarded-for header against IP allow list
-	if len(ac.Spec.IpAllowList) > 0 && xForwardedFor != "" {
-		ipAllowed, err := CheckIP(xForwardedFor, ac.Spec.IpAllowList)
+	if len(ac.Spec.IpAllowList) > 0 {
+		publicIp, err := lastPublicIp(ipList)
+		if err != nil {
+			return false, CerberusReasonNoValidIp, newExtraHeaders
+		}
+		ipAllowed, err := checkIP(publicIp, ac.Spec.IpAllowList)
 		if err != nil {
 			return false, CerberusReasonBadIpList, newExtraHeaders
 		}
@@ -379,9 +403,21 @@ func NewAuthenticator(logger logr.Logger) (*Authenticator, error) {
 	return &a, nil
 }
 
-// CheckIP checks if given ip is a member of given CIDR networks or not
+// lastPublicIp will identify the last valid public IP address within the list of IPs
+// will return an error if it cannot find any valid public IP addresses in the input list.
+func lastPublicIp(ips []string) (string, error) {
+	for i := len(ips); i >= 0; i-- {
+		clientIP := net.ParseIP(ips[i])
+		if clientIP != nil && !clientIP.IsPrivate() {
+			return ips[i], nil
+		}
+	}
+	return "", nil
+}
+
+// checkIP checks if given ip is a member of given CIDR networks or not
 // ipAllowList should be CIDR notation of the networks or net.ParseError will be retuned
-func CheckIP(ip string, ipAllowList []string) (bool, error) {
+func checkIP(ip string, ipAllowList []string) (bool, error) {
 	clientIP := net.ParseIP(ip)
 
 	for _, AllowedRangeIP := range ipAllowList {

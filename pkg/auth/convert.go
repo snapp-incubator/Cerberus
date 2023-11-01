@@ -34,6 +34,7 @@ func (r *Request) FromV2(c *CheckRequestV2) *Request {
 		Header: http.Header{},
 		Method: c.GetAttributes().GetRequest().GetHttp().GetMethod(),
 		Proto:  c.GetAttributes().GetRequest().GetHttp().GetProtocol(),
+		RemoteAddr: c.GetAttributes().Source.GetAddress().GetSocketAddress().GetAddress() ,
 	}
 
 	for k, v := range c.GetAttributes().GetRequest().GetHttp().GetHeaders() {
@@ -59,6 +60,7 @@ func (r *Request) FromV3(c *CheckRequestV3) *Request {
 		Header: http.Header{},
 		Method: c.GetAttributes().GetRequest().GetHttp().GetMethod(),
 		Proto:  c.GetAttributes().GetRequest().GetHttp().GetProtocol(),
+		RemoteAddr: c.GetAttributes().Source.GetAddress().GetSocketAddress().GetAddress() ,
 	}
 
 	for k, v := range c.GetAttributes().GetRequest().GetHttp().GetHeaders() {

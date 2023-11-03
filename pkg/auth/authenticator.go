@@ -406,7 +406,7 @@ func NewAuthenticator(logger logr.Logger) (*Authenticator, error) {
 // lastPublicIp will identify the last valid public IP address within the list of IPs
 // will return an error if it cannot find any valid public IP addresses in the input list.
 func lastPublicIp(ips []string) (string, error) {
-	for i := len(ips); i >= 0; i-- {
+	for i := len(ips) - 1; i >= 0; i-- {
 		clientIP := net.ParseIP(ips[i])
 		if clientIP != nil && !clientIP.IsPrivate() {
 			return ips[i], nil

@@ -70,7 +70,7 @@ spec:
             # - "--tls-key-path=/opt/cert/tls.key"
             # - "--tls-cert-path=/opt/cert/tls.crt"
             # - "--tls-ca-path=/opt/cert/ca.crt"
-          image: ghcr.io/snapp-incubator/cerberus:1.6.0
+          image: ghcr.io/snapp-incubator/cerberus:1.6.3
           name: manager
           volumeMounts:
             - mountPath: /opt/cert

@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"math/rand"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -250,6 +251,8 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 // TestAccess will check if given AccessToken (identified by raw token in the request)
 // has access to given Webservice (identified by its name) and returns proper CerberusReason
 func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (bool, CerberusReason, ExtraHeaders) {
+	debug := (rand.Intn(100) < 1)
+
 	newExtraHeaders := make(ExtraHeaders)
 	ok, reason, token := a.readToken(request, wsvc)
 	if !ok {
@@ -273,6 +276,17 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 
 	// Retrieve "remoteAddr" from the requeset
 	remoteAddr := request.Request.RemoteAddr
+
+	if debug {
+		a.logger.Info("testing request",
+			"x-forward-for", xForwardedFor,
+			"ipList", ipList,
+			"referrer", referrer,
+			"remoteAddr", remoteAddr,
+			"ipAllowList", (*a.accessCache)[token].Spec.IpAllowList,
+		)
+	}
+
 	host, _, err := net.SplitHostPort(remoteAddr)
 	if err != nil {
 		return false, CerberusReasonInvalidSourceIp, newExtraHeaders

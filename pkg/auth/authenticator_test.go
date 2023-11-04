@@ -35,7 +35,7 @@ func BenchmarkCheckIPWithLargeInput(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, _ = checkIP(testIP, ipAllowList)
+		_, _ = checkIP([]string{testIP}, ipAllowList)
 	}
 }
 

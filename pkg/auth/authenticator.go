@@ -277,16 +277,6 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 	// Retrieve "remoteAddr" from the requeset
 	remoteAddr := request.Request.RemoteAddr
 
-	if debug {
-		a.logger.Info("testing request",
-			"x-forward-for", xForwardedFor,
-			"ipList", ipList,
-			"referrer", referrer,
-			"remoteAddr", remoteAddr,
-			"ipAllowList", (*a.accessCache)[token].Spec.IpAllowList,
-		)
-	}
-
 	host, _, err := net.SplitHostPort(remoteAddr)
 	if err != nil {
 		return false, CerberusReasonInvalidSourceIp, newExtraHeaders
@@ -313,6 +303,15 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 			return false, CerberusReasonBadIpList, newExtraHeaders
 		}
 		if !ipAllowed {
+			if debug {
+				a.logger.Info("testing request",
+					"x-forward-for", xForwardedFor,
+					"ipList", ipList,
+					"referrer", referrer,
+					"remoteAddr", remoteAddr,
+					"ipAllowList", (*a.accessCache)[token].Spec.IpAllowList,
+				)
+			}
 			return false, CerberusReasonIpNotAllowed, newExtraHeaders
 		}
 	}

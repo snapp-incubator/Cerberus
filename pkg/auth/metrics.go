@@ -1,16 +1,18 @@
 package auth
 
 import (
+	"strconv"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
-	"strconv"
 )
 
 const (
-	CerberusReasonLabel      = "cerberus_reason"
-	CheckRequestVersionLabel = "check_request_version"
-	HasUpstreamAuth		     = "upstream_auth_enabled"
-	ObjectKindLabel          = "kind"
+	CerberusReasonLabel         = "cerberus_reason"
+	CheckRequestVersionLabel    = "check_request_version"
+	HasUpstreamAuth             = "upstream_auth_enabled"
+	ObjectKindLabel             = "kind"
+	WithDownstreamDeadlineLabel = "with_downstream_deadline"
 
 	MetricsKindSecret                  = "secret"
 	MetricsKindWebservice              = "webservice"
@@ -23,7 +25,7 @@ const (
 )
 
 var (
-	DurationBuckets      = []float64{0.000005, 0.00001, 0.000015, 0.00003, 0.00004, 0.00005, 0.000075, 0.0001, 0.000125, 0.00015, 0.000175, 0.0002,  0.00025, .0005, .001, .002, .003, .004, .005, .006, .007, .008, .009, .01, .02, .05, .1, 1, 2.5, 5}
+	DurationBuckets      = []float64{0.000005, 0.00001, 0.000015, 0.00003, 0.00004, 0.00005, 0.000075, 0.0001, 0.000125, 0.00015, 0.000175, 0.0002, 0.00025, .0005, .001, .002, .003, .004, .005, .006, .007, .008, .009, .01, .02, .05, .1, 1, 2.5, 5}
 	SmallDurationBuckets = []float64{0.0000001, 0.000001, 0.0000025, 0.000005, 0.00001, 0.000025, 0.00005, 0.0001, 0.001, 0.01, 0.05, 0.1}
 
 	reqCount = prometheus.NewCounterVec(
@@ -104,11 +106,13 @@ var (
 		[]string{ObjectKindLabel},
 	)
 
-	serviceUpstreamAuthCalls = prometheus.NewCounter(
+	serviceUpstreamAuthCalls = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "upstream_auth_calls_total",
 			Help: "The total number of checkServiceUpstreamAuth function calls",
-		})
+		},
+		[]string{WithDownstreamDeadlineLabel},
+	)
 
 	upstreamAuthRequestDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -116,7 +120,7 @@ var (
 			Help:    "Duration of the UpstreamAuth Requests in seconds",
 			Buckets: DurationBuckets,
 		},
-		[]string{StatusCode},
+		[]string{StatusCode, WithDownstreamDeadlineLabel},
 	)
 )
 
@@ -166,5 +170,17 @@ func AddUpstreamAuthLabel(labels prometheus.Labels, hasUpstreamAuth string) prom
 		labels = prometheus.Labels{}
 	}
 	labels[HasUpstreamAuth] = hasUpstreamAuth
+	return labels
+}
+
+func AddWithDownstreamDeadline(labels prometheus.Labels, hasDeadline bool) prometheus.Labels {
+	if labels == nil {
+		labels = prometheus.Labels{}
+	}
+	if hasDeadline {
+		labels[WithDownstreamDeadlineLabel] = "true"
+	} else {
+		labels[WithDownstreamDeadlineLabel] = "false"
+	}
 	return labels
 }

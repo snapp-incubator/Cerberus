@@ -88,6 +88,9 @@ const (
 	// CerberusReasonInvalidSourceIp means that source ip in remoteAddre is not valid
 	CerberusReasonInvalidSourceIp CerberusReason = "invalid-source-ip"
 
+	// CerberusReasonEmptySourceIp means that source ip is empty
+	CerberusReasonEmptySourceIp CerberusReason = "source-ip-empty"
+
 	// CerberusReasonBadIpList means that there is no valid public ip for validation
 	CerberusReasonNoValidIp CerberusReason = "no-valid-ip"
 
@@ -277,6 +280,9 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 	if err != nil {
 		return false, CerberusReasonInvalidSourceIp, newExtraHeaders
 	}
+	if net.ParseIP(host) == nil {
+		return false, CerberusReasonEmptySourceIp, newExtraHeaders
+	}
 	ipList = append(ipList, host)
 
 	if token == "" {
@@ -291,8 +297,8 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 
 	// Check x-forwarded-for header against IP allow list
 	if len(ac.Spec.IpAllowList) > 0 {
-		publicIp, err := lastPublicIp(ipList)
-		if err != nil {
+		publicIp := lastPublicIp(ipList)
+		if publicIp == "" {
 			return false, CerberusReasonNoValidIp, newExtraHeaders
 		}
 		ipAllowed, err := checkIP(publicIp, ac.Spec.IpAllowList)
@@ -405,14 +411,14 @@ func NewAuthenticator(logger logr.Logger) (*Authenticator, error) {
 
 // lastPublicIp will identify the last valid public IP address within the list of IPs
 // will return an error if it cannot find any valid public IP addresses in the input list.
-func lastPublicIp(ips []string) (string, error) {
+func lastPublicIp(ips []string) string {
 	for i := len(ips) - 1; i >= 0; i-- {
 		clientIP := net.ParseIP(ips[i])
 		if clientIP != nil && !clientIP.IsPrivate() {
-			return ips[i], nil
+			return ips[i]
 		}
 	}
-	return "", nil
+	return ""
 }
 
 // checkIP checks if given ip is a member of given CIDR networks or not

@@ -17,7 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -38,6 +37,12 @@ type WebServiceSpec struct {
 	// authentication to another (HTTP) service or not
 	// +optional
 	UpstreamHttpAuth UpstreamHttpAuthService `json:"upstreamHttpAuth"`
+
+	// IgnoreIP tells Cerberus whether it should check ip list of specific webservice or not
+	IgnoreIP bool `json:"ignoreIP"`
+
+	// IgnoreDomain tells Cerberus whether it should check domain list of specific webservice or not
+	IgnoreDomain bool `json:"ignoreDomain"`
 }
 
 // TODO set default value for LookupHeader
@@ -54,7 +59,7 @@ type UpstreamHttpAuthService struct {
 	// WriteTokenTo specifies which header should carry token to upstream service
 	WriteTokenTo string `json:"writeTokenTo"`
 
-	// CareHeaders specifies which headers from the upstream should be added to the downstream response. 
+	// CareHeaders specifies which headers from the upstream should be added to the downstream response.
 	// +optional
 	CareHeaders []string `json:"careHeaders,omitempty"`
 

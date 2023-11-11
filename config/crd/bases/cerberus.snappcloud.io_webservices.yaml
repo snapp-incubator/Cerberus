@@ -35,6 +35,14 @@ spec:
           spec:
             description: WebServiceSpec defines the desired state of WebService
             properties:
+              ignoreDomain:
+                description: IgnoreDomain tells Cerberus whether it should check domain
+                  list of specific webservice or not
+                type: boolean
+              ignoreIP:
+                description: IgnoreIP tells Cerberus whether it should check ip list
+                  of specific webservice or not
+                type: boolean
               lookupHeader:
                 default: X-Cerberus-Token
                 description: LookupHeader tells Cerberus which header should be used
@@ -75,6 +83,9 @@ spec:
                 - timeout
                 - writeTokenTo
                 type: object
+            required:
+            - ignoreDomain
+            - ignoreIP
             type: object
           status:
             description: WebServiceStatus defines the observed state of WebService

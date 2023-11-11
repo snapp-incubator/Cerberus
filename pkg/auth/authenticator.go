@@ -275,7 +275,7 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 	}
 	referrer := request.Request.Header.Get("referrer")
 
-	// Retrieve "remoteAddr" from the requeset
+	// Retrieve "remoteAddr" from the request
 	remoteAddr := request.Request.RemoteAddr
 	host, _, err := net.SplitHostPort(remoteAddr)
 	if err != nil {
@@ -296,8 +296,8 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 		return false, CerberusReasonTokenNotFound, newExtraHeaders
 	}
 
-	// Check x-forwarded-for header against IP allow list
-	if len(ac.Spec.IpAllowList) > 0 {
+	// Check if IgnoreIP is true, skip IP list check
+	if !wsvc.Spec.IgnoreIP && len(ac.Spec.IpAllowList) > 0 {
 		ipAllowed, err := checkIP(ipList, ac.Spec.IpAllowList)
 		if err != nil {
 			return false, CerberusReasonBadIpList, newExtraHeaders
@@ -307,8 +307,8 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 		}
 	}
 
-	// Check referrer header against domain allow list
-	if len(ac.Spec.DomainAllowList) > 0 && referrer != "" {
+	// Check if IgnoreDomain is true, skip domain list check
+	if !wsvc.Spec.IgnoreDomain && len(ac.Spec.DomainAllowList) > 0 && referrer != "" {
 		domainAllowed, err := CheckDomain(referrer, ac.Spec.DomainAllowList)
 		if err != nil {
 			return false, CerberusReasonBadDomainList, newExtraHeaders

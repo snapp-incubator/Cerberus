@@ -39,9 +39,11 @@ type WebServiceSpec struct {
 	UpstreamHttpAuth UpstreamHttpAuthService `json:"upstreamHttpAuth"`
 
 	// IgnoreIP tells Cerberus whether it should check ip list of specific webservice or not
+	// +optional
 	IgnoreIP bool `json:"ignoreIP"`
 
 	// IgnoreDomain tells Cerberus whether it should check domain list of specific webservice or not
+	// +optional
 	IgnoreDomain bool `json:"ignoreDomain"`
 }
 

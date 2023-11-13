@@ -265,26 +265,6 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 	defer a.cacheLock.RUnlock()
 	defer cacheReaders.Dec()
 
-	ipList := make([]string, 0)
-
-	// Retrieve "x-forwarded-for" and "referrer" headers from the request
-	xForwardedFor := request.Request.Header.Get("x-forwarded-for")
-	if xForwardedFor != "" {
-		ips := strings.Split(xForwardedFor, ", ")
-		ipList = append(ipList, ips...)
-	}
-	referrer := request.Request.Header.Get("referrer")
-
-	// Retrieve "remoteAddr" from the request
-	remoteAddr := request.Request.RemoteAddr
-	host, _, err := net.SplitHostPort(remoteAddr)
-	if err != nil {
-		return false, CerberusReasonInvalidSourceIp, newExtraHeaders
-	}
-	if net.ParseIP(host) == nil {
-		return false, CerberusReasonEmptySourceIp, newExtraHeaders
-	}
-	ipList = append(ipList, host)
 
 	if token == "" {
 		return false, CerberusReasonTokenEmpty, newExtraHeaders
@@ -296,14 +276,38 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 		return false, CerberusReasonTokenNotFound, newExtraHeaders
 	}
 
-	// Check if IgnoreIP is true, skip IP list check
-	if !wsvc.Spec.IgnoreIP && len(ac.Spec.IpAllowList) > 0 {
-		ipAllowed, err := checkIP(ipList, ac.Spec.IpAllowList)
-		if err != nil {
-			return false, CerberusReasonBadIpList, newExtraHeaders
+	var referrer string
+	if len(ac.Spec.IpAllowList) > 0 {
+		ipList := make([]string, 0)
+
+		// Retrieve "x-forwarded-for" and "referrer" headers from the request
+		xForwardedFor := request.Request.Header.Get("x-forwarded-for")
+		if xForwardedFor != "" {
+			ips := strings.Split(xForwardedFor, ", ")
+			ipList = append(ipList, ips...)
 		}
-		if !ipAllowed {
-			return false, CerberusReasonIpNotAllowed, newExtraHeaders
+		referrer = request.Request.Header.Get("referrer")
+
+		// Retrieve "remoteAddr" from the request
+		remoteAddr := request.Request.RemoteAddr
+		host, _, err := net.SplitHostPort(remoteAddr)
+		if err != nil {
+			return false, CerberusReasonInvalidSourceIp, newExtraHeaders
+		}
+		if net.ParseIP(host) == nil {
+			return false, CerberusReasonEmptySourceIp, newExtraHeaders
+		}
+		ipList = append(ipList, host)
+
+		// Check if IgnoreIP is true, skip IP list check
+		if !wsvc.Spec.IgnoreIP {
+			ipAllowed, err := checkIP(ipList, ac.Spec.IpAllowList)
+			if err != nil {
+				return false, CerberusReasonBadIpList, newExtraHeaders
+			}
+			if !ipAllowed {
+				return false, CerberusReasonIpNotAllowed, newExtraHeaders
+			}
 		}
 	}
 

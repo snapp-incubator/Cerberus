@@ -4,5 +4,6 @@ resources:
   - namespace.yaml
 
 bases:
+  - ../contour
   - ../crd
   - ../rbac

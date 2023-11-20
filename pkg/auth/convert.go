@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 
@@ -34,6 +35,7 @@ func (r *Request) FromV2(c *CheckRequestV2) *Request {
 		Header: http.Header{},
 		Method: c.GetAttributes().GetRequest().GetHttp().GetMethod(),
 		Proto:  c.GetAttributes().GetRequest().GetHttp().GetProtocol(),
+		RemoteAddr: c.GetAttributes().GetSource().GetAddress().GetSocketAddress().GetAddress() + ":" + fmt.Sprint(c.GetAttributes().GetSource().GetAddress().GetSocketAddress().GetPortValue()),
 	}
 
 	for k, v := range c.GetAttributes().GetRequest().GetHttp().GetHeaders() {
@@ -59,6 +61,7 @@ func (r *Request) FromV3(c *CheckRequestV3) *Request {
 		Header: http.Header{},
 		Method: c.GetAttributes().GetRequest().GetHttp().GetMethod(),
 		Proto:  c.GetAttributes().GetRequest().GetHttp().GetProtocol(),
+		RemoteAddr: c.GetAttributes().GetSource().GetAddress().GetSocketAddress().GetAddress() + ":" + fmt.Sprint(c.GetAttributes().GetSource().GetAddress().GetSocketAddress().GetPortValue()),
 	}
 
 	for k, v := range c.GetAttributes().GetRequest().GetHttp().GetHeaders() {

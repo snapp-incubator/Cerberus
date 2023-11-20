@@ -18,6 +18,6 @@ metadata:
     app.kubernetes.io/created-by: cerberus
   name: accesstoken-sample
 spec:
-  active: Active
+  state: Active
   secretRef:
     name: "cerberus-operator-system.accesstoken-sample"

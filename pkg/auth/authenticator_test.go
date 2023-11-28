@@ -303,6 +303,138 @@ func TestTestAccessValidToken(t *testing.T) {
 	assert.Equal(t, "valid-token", extraHeaders["X-Cerberus-AccessToken"], "Expected token in extraHeaders")
 }
 
+func TestTestAccessInvalidToken(t *testing.T) {
+	authenticator := &Authenticator{
+		accessCache:   &AccessCache{},
+		servicesCache: &ServicesCache{},
+	}
+
+	headers := http.Header{}
+	headers.Set("X-Cerberus-Token", "invalid-token")
+
+	request := &Request{
+		Context: map[string]string{
+			"webservice": "SampleWebService",
+		},
+		Request: http.Request{
+			Header: headers,
+		},
+	}
+
+	webservice := ServicesCacheEntry{
+		cerberusv1alpha1.WebService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "SampleWebService",
+			},
+			Spec: cerberusv1alpha1.WebServiceSpec{
+				LookupHeader: "X-Cerberus-Token",
+			},
+		},
+	}
+
+	(*authenticator.servicesCache)["SampleWebService"] = webservice
+
+	ok, reason, extraHeaders := authenticator.TestAccess(request, webservice)
+
+	assert.False(t, ok, "Expected access to be denied")
+	assert.Equal(t, CerberusReasonTokenNotFound, reason, "Expected reason to be TokenNotFound")
+	assert.Empty(t, extraHeaders, "Expected no extra headers for invalid token")
+}
+
+func TestTestAccessEmptyToken(t *testing.T) {
+	authenticator := &Authenticator{
+		accessCache:   &AccessCache{},
+		servicesCache: &ServicesCache{},
+	}
+
+	headers := http.Header{}
+	headers.Set("X-Cerberus-Token", "")
+
+	request := &Request{
+		Context: map[string]string{
+			"webservice": "SampleWebService",
+		},
+		Request: http.Request{
+			Header: headers,
+		},
+	}
+
+	webservice := ServicesCacheEntry{
+		cerberusv1alpha1.WebService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "SampleWebService",
+			},
+			Spec: cerberusv1alpha1.WebServiceSpec{
+				LookupHeader: "X-Cerberus-Token",
+			},
+		},
+	}
+
+	(*authenticator.servicesCache)["SampleWebService"] = webservice
+
+	ok, reason, extraHeaders := authenticator.TestAccess(request, webservice)
+
+	assert.False(t, ok, "Expected access to be denied")
+	assert.Equal(t, CerberusReasonTokenEmpty, reason, "Expected reason to be TokenEmpty")
+	assert.Empty(t, extraHeaders, "Expected no extra headers for empty token")
+}
+
+func TestTestAccessBadIPList(t *testing.T) {
+	authenticator := &Authenticator{
+		accessCache:   &AccessCache{},
+		servicesCache: &ServicesCache{},
+	}
+
+	tokenEntry := AccessCacheEntry{
+		AccessToken: cerberusv1alpha1.AccessToken{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "valid-token",
+			},
+			Spec: cerberusv1alpha1.AccessTokenSpec{
+				IpAllowList: []string{"192.168.1.1", "192.168.1.2"},
+			},
+		},
+		allowedServices: map[string]struct{}{
+			"SampleWebService": {},
+		},
+	}
+	(*authenticator.accessCache)["valid-token"] = tokenEntry
+
+	// Assuming an IP not in the allow list
+	headers := http.Header{}
+	headers.Set("X-Cerberus-Token", "valid-token")
+	headers.Set("X-Forwarded-For", "192.168.1.3")
+
+	request := &Request{
+		Context: map[string]string{
+			"webservice": "SampleWebService",
+		},
+		Request: http.Request{
+			Header:     headers,
+			RemoteAddr: "192.168.1.3:12345",
+		},
+	}
+
+	webservice := ServicesCacheEntry{
+		cerberusv1alpha1.WebService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "SampleWebService",
+			},
+			Spec: cerberusv1alpha1.WebServiceSpec{
+				LookupHeader: "X-Cerberus-Token",
+			},
+		},
+	}
+
+	(*authenticator.servicesCache)["SampleWebService"] = webservice
+
+	ok, reason, extraHeaders := authenticator.TestAccess(request, webservice)
+
+	assert.False(t, ok, "Expected access to be denied")
+	assert.Equal(t, CerberusReasonBadIpList, reason, "Expected reason to be BadIpList")
+	assert.Empty(t, extraHeaders, "Expected no extra headers for invalid IP")
+}
+
 func setupTestEnvironment(t *testing.T) (client.Client, *Authenticator) {
 	// Initialize a Kubernetes client's scheme.
 	scheme := runtime.NewScheme()

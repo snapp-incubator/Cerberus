@@ -27,9 +27,11 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "go.uber.org/automaxprocs"
 	"google.golang.org/grpc"
+	v1 "k8s.io/api/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	controllercache "sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -140,11 +142,15 @@ func setupManager(
 		LeaderElectionID:       "f5d1781e.snappcloud.io",
 		// limit Manager to cerberus namespace
 		NewCache: func(config *rest.Config, opts controllercache.Options) (controllercache.Cache, error) {
-			opts.DefaultNamespaces = map[string]controllercache.Config{
-				"cerberus-operator-system":{},
+			opts.ByObject = make(map[client.Object]controllercache.ByObject)
+			opts.ByObject[&v1.Secret{}] = controllercache.ByObject{
+				Namespaces: map[string]controllercache.Config{
+					"cerberus-operator-system": {},
+				},
 			}
+
 			return controllercache.New(config, opts)
-		}, 
+		},
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly

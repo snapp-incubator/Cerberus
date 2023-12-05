@@ -3,7 +3,7 @@ kind: ExtensionService
 metadata:
   name: cerberus-auth
 spec:
-  protocol: h2
+  protocol: h2c
   services:
     - name: cerberus
       port: 8082

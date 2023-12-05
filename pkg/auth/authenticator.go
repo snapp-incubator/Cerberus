@@ -20,6 +20,10 @@ import (
 	v1 "k8s.io/api/core/v1"
 )
 
+// downstreamDeadlineOffset sets an offset to downstream deadline inorder
+// to save a little time to update metrics and answer downstream request
+const downstreamDeadlineOffset = 50 * time.Microsecond
+
 // Authenticator can generate cache from Kubernetes API server
 // and it implements envoy.CheckRequest interface
 type Authenticator struct {
@@ -272,26 +276,6 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 	defer a.cacheLock.RUnlock()
 	defer cacheReaders.Dec()
 
-	ipList := make([]string, 0)
-
-	// Retrieve "x-forwarded-for" and "referrer" headers from the request
-	xForwardedFor := request.Request.Header.Get("x-forwarded-for")
-	if xForwardedFor != "" {
-		ips := strings.Split(xForwardedFor, ", ")
-		ipList = append(ipList, ips...)
-	}
-	referrer := request.Request.Header.Get("referrer")
-
-	// Retrieve "remoteAddr" from the requeset
-	remoteAddr := request.Request.RemoteAddr
-	host, _, err := net.SplitHostPort(remoteAddr)
-	if err != nil {
-		return false, CerberusReasonInvalidSourceIp, newExtraHeaders
-	}
-	if net.ParseIP(host) == nil {
-		return false, CerberusReasonEmptySourceIp, newExtraHeaders
-	}
-	ipList = append(ipList, host)
 
 	if token == "" {
 		return false, CerberusReasonTokenEmpty, newExtraHeaders
@@ -303,19 +287,43 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 		return false, CerberusReasonTokenNotFound, newExtraHeaders
 	}
 
-	// Check x-forwarded-for header against IP allow list
+	var referrer string
 	if len(ac.Spec.IpAllowList) > 0 {
-		ipAllowed, err := checkIP(ipList, ac.Spec.IpAllowList)
-		if err != nil {
-			return false, CerberusReasonBadIpList, newExtraHeaders
+		ipList := make([]string, 0)
+
+		// Retrieve "x-forwarded-for" and "referrer" headers from the request
+		xForwardedFor := request.Request.Header.Get("x-forwarded-for")
+		if xForwardedFor != "" {
+			ips := strings.Split(xForwardedFor, ", ")
+			ipList = append(ipList, ips...)
 		}
-		if !ipAllowed {
-			return false, CerberusReasonIpNotAllowed, newExtraHeaders
+		referrer = request.Request.Header.Get("referrer")
+
+		// Retrieve "remoteAddr" from the request
+		remoteAddr := request.Request.RemoteAddr
+		host, _, err := net.SplitHostPort(remoteAddr)
+		if err != nil {
+			return false, CerberusReasonInvalidSourceIp, newExtraHeaders
+		}
+		if net.ParseIP(host) == nil {
+			return false, CerberusReasonEmptySourceIp, newExtraHeaders
+		}
+		ipList = append(ipList, host)
+
+		// Check if IgnoreIP is true, skip IP list check
+		if !wsvc.Spec.IgnoreIP {
+			ipAllowed, err := checkIP(ipList, ac.Spec.IpAllowList)
+			if err != nil {
+				return false, CerberusReasonBadIpList, newExtraHeaders
+			}
+			if !ipAllowed {
+				return false, CerberusReasonIpNotAllowed, newExtraHeaders
+			}
 		}
 	}
 
-	// Check referrer header against domain allow list
-	if len(ac.Spec.DomainAllowList) > 0 && referrer != "" {
+	// Check if IgnoreDomain is true, skip domain list check
+	if !wsvc.Spec.IgnoreDomain && len(ac.Spec.DomainAllowList) > 0 && referrer != "" {
 		domainAllowed, err := CheckDomain(referrer, ac.Spec.DomainAllowList)
 		if err != nil {
 			return false, CerberusReasonBadDomainList, newExtraHeaders
@@ -375,7 +383,7 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response,
 		ok, reason, extraHeaders = a.TestAccess(request, wsvcCacheEntry)
 		if ok && hasUpstreamAuth(wsvcCacheEntry) {
 			request.Context[HasUpstreamAuth] = "true"
-			ok, reason = a.checkServiceUpstreamAuth(wsvcCacheEntry, request, &extraHeaders)
+			ok, reason = a.checkServiceUpstreamAuth(wsvcCacheEntry, request, &extraHeaders, ctx)
 		}
 	}
 
@@ -458,8 +466,9 @@ func CheckDomain(domain string, domainAllowedList []string) (bool, error) {
 
 // checkServiceUpstreamAuth function is designed to validate the request through
 // the upstream authentication for a given webservice
-func (a *Authenticator) checkServiceUpstreamAuth(service ServicesCacheEntry, request *Request, extraHeaders *ExtraHeaders) (bool, CerberusReason) {
-	serviceUpstreamAuthCalls.Inc()
+func (a *Authenticator) checkServiceUpstreamAuth(service ServicesCacheEntry, request *Request, extraHeaders *ExtraHeaders, ctx context.Context) (bool, CerberusReason) {
+	downstreamDeadline, hasDownstreamDeadline := ctx.Deadline()
+	serviceUpstreamAuthCalls.With(AddWithDownstreamDeadline(nil, hasDownstreamDeadline)).Inc()
 
 	if service.Spec.UpstreamHttpAuth.ReadTokenFrom == "" {
 		return false, CerberusReasonSourceAuthTokenEmpty
@@ -485,6 +494,12 @@ func (a *Authenticator) checkServiceUpstreamAuth(service ServicesCacheEntry, req
 	}
 
 	a.httpClient.Timeout = time.Duration(service.Spec.UpstreamHttpAuth.Timeout) * time.Millisecond
+	if hasDownstreamDeadline {
+		if time.Until(downstreamDeadline)-downstreamDeadlineOffset < a.httpClient.Timeout {
+			a.httpClient.Timeout = time.Until(downstreamDeadline) - downstreamDeadlineOffset
+		}
+	}
+
 	reqStart := time.Now()
 	resp, err := a.httpClient.Do(req)
 	reqDuration := time.Since(reqStart)
@@ -496,7 +511,7 @@ func (a *Authenticator) checkServiceUpstreamAuth(service ServicesCacheEntry, req
 		return false, CerberusReasonUpstreamAuthFailed
 	}
 
-	labels := AddStatusLabel(nil, resp.StatusCode)
+	labels := AddWithDownstreamDeadline(AddStatusLabel(nil, resp.StatusCode), hasDownstreamDeadline)
 	upstreamAuthRequestDuration.With(labels).Observe(reqDuration.Seconds())
 
 	if resp.StatusCode != http.StatusOK {

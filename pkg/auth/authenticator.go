@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -12,6 +13,8 @@ import (
 	"github.com/asaskevich/govalidator"
 	"github.com/go-logr/logr"
 	cerberusv1alpha1 "github.com/snapp-incubator/Cerberus/api/v1alpha1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v1 "k8s.io/api/core/v1"
@@ -122,9 +125,17 @@ const (
 	// does not contain a target upstream auth lookup header in it's manifest
 	CerberusReasonTargetAuthTokenEmpty CerberusReason = "upstream-target-identifier-empty"
 
+	// CerberusReasonUpstreamAuthTimeout means that the request to the specified
+	// upstream timeout with respect to request deadline
+	CerberusReasonUpstreamAuthTimeout CerberusReason = "upstream-auth-timeout"
+
 	// CerberusReasonUpstreamAuthFailed means that the request to the specified
 	// upstream failed due to an unidentified issue
 	CerberusReasonUpstreamAuthFailed CerberusReason = "upstream-auth-failed"
+
+	// CerberusReasonUpstreamAuthNoReq means that cerberus failed to create
+	// request for specified upstream auth
+	CerberusReasonUpstreamAuthNoReq CerberusReason = "upstream-auth-no-request"
 )
 
 //+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=accesstokens,verbs=get;list;watch;
@@ -386,10 +397,15 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response,
 		response.Header.Add(key, value)
 	}
 
+	var err error
+	if reason == CerberusReasonUpstreamAuthTimeout || reason == CerberusReasonUpstreamAuthFailed {
+		err = status.Error(codes.DeadlineExceeded, "Timeout exceeded")
+	}
+
 	return &Response{
 		Allow:    ok,
 		Response: response,
-	}, nil
+	}, err
 }
 
 // NewAuthenticator creates new Authenticator object with given logger.
@@ -460,7 +476,7 @@ func (a *Authenticator) checkServiceUpstreamAuth(service ServicesCacheEntry, req
 	// TODO: get http method from webservice crd
 	req, err := http.NewRequest("GET", service.Spec.UpstreamHttpAuth.Address, nil)
 	if err != nil {
-		return false, CerberusReasonUpstreamAuthFailed
+		return false, CerberusReasonUpstreamAuthNoReq
 	}
 
 	req.Header = http.Header{
@@ -473,6 +489,10 @@ func (a *Authenticator) checkServiceUpstreamAuth(service ServicesCacheEntry, req
 	resp, err := a.httpClient.Do(req)
 	reqDuration := time.Since(reqStart)
 	if err != nil {
+		urlErr, ok := err.(*url.Error)
+		if ok && urlErr != nil && urlErr.Timeout() {
+			return false, CerberusReasonUpstreamAuthTimeout
+		}
 		return false, CerberusReasonUpstreamAuthFailed
 	}
 

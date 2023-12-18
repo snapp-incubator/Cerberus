@@ -45,6 +45,12 @@ type WebServiceSpec struct {
 	// IgnoreDomain tells Cerberus whether it should check domain list of specific webservice or not
 	// +optional
 	IgnoreDomain bool `json:"ignoreDomain"`
+
+	// MinimumTokenPriority tells Cerberus what minimum priority it should stablish for token authentication
+	// +kubebuilder:default=0
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	MinimumTokenPriority int `json:"minimumTokenPriority"`
 }
 
 // TODO set default value for LookupHeader

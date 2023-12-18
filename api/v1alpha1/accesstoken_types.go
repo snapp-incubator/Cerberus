@@ -64,6 +64,12 @@ type AccessTokenSpec struct {
 	// Secret Ref points to secret containing the API Key secret
 	// if it exists it will use the token value in it and will create a new secret if not exists
 	TokenSecretRef *corev1.LocalObjectReference `json:"secretRef,omitempty"`
+
+	// Priority shows the access level of the token
+	// +kubebuilder:default=0
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	Priority int `json:"priority,omitempty"`
 }
 
 // TODO use AccessToken.Metadata.Name as TokenSecretRef

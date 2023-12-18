@@ -49,6 +49,12 @@ spec:
                   as the access token for authentication (case-sensitive).
                 pattern: ^(X-[A-Za-z-]*[A-Za-z]|Authorization)$
                 type: string
+              minimumTokenPriority:
+                default: 0
+                description: MinimumTokenPriority tells Cerberus whether it should
+                  stablish the minimum priority threshold for token authentication
+                minimum: 0
+                type: integer
               upstreamHttpAuth:
                 description: UpstreamHttpAuth tells Cerberus whether it needs to forward
                   authentication to another (HTTP) service or not

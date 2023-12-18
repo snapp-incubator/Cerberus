@@ -2,16 +2,17 @@ package auth
 
 import (
 	"fmt"
-	cerberusv1alpha1 "github.com/snapp-incubator/Cerberus/api/v1alpha1"
-	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"net/http"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"testing"
 
+	cerberusv1alpha1 "github.com/snapp-incubator/Cerberus/api/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"context"
+
 	"github.com/stretchr/testify/assert"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -186,9 +187,9 @@ func TestReadService(t *testing.T) {
 			if reason != tc.expectedReason {
 				t.Errorf("Expected reason: %v, Got: %v", tc.expectedReason, reason)
 			}
-			if ok {
-				//TODO: Check cache entry fields, e.g., cacheEntry.SomeField
-			}
+			// if ok {
+			//TODO: Check cache entry fields, e.g., cacheEntry.SomeField
+			// }
 		})
 	}
 }
@@ -445,9 +446,9 @@ func setupTestEnvironment(t *testing.T) (client.Client, *Authenticator) {
 		t.Fatalf("Failed to add cerberusv1alpha1 to scheme: %v", err)
 	}
 
-	err = v1.AddToScheme(scheme)
+	err = corev1.AddToScheme(scheme)
 	if err != nil {
-		t.Fatalf("Failed to add v1 to scheme: %v", err)
+		t.Fatalf("Failed to add corev1 to scheme: %v", err)
 	}
 
 	// Create a fake Kubernetes client using the registered scheme.
@@ -514,12 +515,12 @@ func prepareWebservices(count int) []cerberusv1alpha1.WebService {
 	return webservices
 }
 
-func prepareSecrets(count int) []v1.Secret {
+func prepareSecrets(count int) []corev1.Secret {
 	// Create and prepare secrets with unique names.
-	secrets := make([]v1.Secret, count)
+	secrets := make([]corev1.Secret, count)
 	for i := 0; i < count; i++ {
 		secretName := fmt.Sprintf("test-secret-%d", i)
-		secrets[i] = v1.Secret{
+		secrets[i] = corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: "default"},
 			Data: map[string][]byte{
 				"token": []byte("test-token-value"),
@@ -550,7 +551,7 @@ func createWebservices(t *testing.T, fakeClient client.Client, webservices ...ce
 	}
 }
 
-func createSecrets(t *testing.T, fakeClient client.Client, secrets ...v1.Secret) {
+func createSecrets(t *testing.T, fakeClient client.Client, secrets ...corev1.Secret) {
 	ctx := context.Background()
 	for _, secret := range secrets {
 		assert.NoError(t, fakeClient.Create(ctx, &secret))

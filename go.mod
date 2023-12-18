@@ -8,6 +8,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.11.0
 	github.com/onsi/gomega v1.27.10
 	github.com/prometheus/client_golang v1.16.0
+	github.com/stretchr/testify v1.8.4
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230911183012-2d3300fd4832
 	google.golang.org/grpc v1.58.0
 	k8s.io/api v0.28.1
@@ -17,8 +18,10 @@ require (
 )
 
 require (
+	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/google/pprof v0.0.0-20210720184732-4bb14d4b1be1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	golang.org/x/tools v0.13.0 // indirect
 )
 

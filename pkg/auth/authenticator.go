@@ -40,16 +40,16 @@ type Authenticator struct {
 // ExtraHeaders are headers which will be added to the response
 type ExtraHeaders map[string]string
 
-// AccessCache is where Authenticator holds it's authentication data,
-// under the hood it is a Map from RawTokens to some informations about
-// AccessToken, see AccessCacheEntry for more informations
+// AccessCache is where Authenticator holds its authentication data,
+// under the hood it is a Map from RawTokens to some information about
+// AccessToken, see AccessCacheEntry for more information
 type AccessCache map[string]AccessCacheEntry
 
-// ServicesCache will hold informations about all listed and suppoerted
+// ServicesCache will hold information about all listed and suppoerted
 // Webservices by the Authenticator
 type ServicesCache map[string]ServicesCacheEntry
 
-// AccessCacheEntry will hold all datas included in AccessToken manifest
+// AccessCacheEntry will hold all datas included in AccessToken manifest,
 // and it also holds a map[string]struct{} which holds name of Webservices
 // which the given token has access to.
 type AccessCacheEntry struct {
@@ -151,7 +151,7 @@ const (
 //+kubebuilder:rbac:groups="",namespace='cerberus-operator-system',resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
 // UpdateCache will accuire a lock on other UpdateCaches and will start to recreate
-// the entire AccessCache and WebserviceCaches (which contains all authentication informations)
+// the entire AccessCache and WebserviceCaches (which contains all authentication information)
 func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOnly bool) error {
 	cacheUpdateCount.Inc()
 	cacheUpdateStartTime := time.Now()

@@ -109,6 +109,9 @@ const (
 	//doesn't match with the ip domain list for specific webservice
 	CerberusReasonIpNotAllowed CerberusReason = "ip-not-allowed"
 
+	// CerberusReasonAccessForbidden means that the token has a priority lower than the minimum required priority set by the web service
+	CerberusReasonAccessForbidden CerberusReason = "access-forbidden"
+
 	// CerberusReasonTokenNotFound means that given AccessToken is read
 	// from request headers, but it is not listed by the Cerberus
 	CerberusReasonTokenNotFound CerberusReason = "token-not-found"
@@ -276,15 +279,17 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 	defer a.cacheLock.RUnlock()
 	defer cacheReaders.Dec()
 
-
 	if token == "" {
 		return false, CerberusReasonTokenEmpty, newExtraHeaders
 	}
 
 	ac, ok := (*a.accessCache)[token]
-
 	if !ok {
 		return false, CerberusReasonTokenNotFound, newExtraHeaders
+	}
+
+	if (*a.accessCache)[token].Spec.Priority < wsvc.Spec.MinimumTokenPriority {
+		return false, CerberusReasonAccessForbidden, newExtraHeaders
 	}
 
 	var referrer string

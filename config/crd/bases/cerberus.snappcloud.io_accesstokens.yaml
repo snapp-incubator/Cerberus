@@ -47,6 +47,11 @@ spec:
                 items:
                   type: string
                 type: array
+              priority:
+                default: 0
+                description: Priority shows the access level of the token
+                minimum: 0
+                type: integer
               secretRef:
                 description: Secret Ref points to secret containing the API Key secret
                   if it exists it will use the token value in it and will create a

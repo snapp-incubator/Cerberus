@@ -436,6 +436,61 @@ func TestTestAccessBadIPList(t *testing.T) {
 	assert.Empty(t, extraHeaders, "Expected no extra headers for invalid IP")
 }
 
+func TestTestAccessLimited(t *testing.T) {
+	authenticator := &Authenticator{
+		accessCache:   &AccessCache{},
+		servicesCache: &ServicesCache{},
+	}
+
+	// Assuming an a token with lower Priority than WebService threshold
+	tokenEntry := AccessCacheEntry{
+		AccessToken: cerberusv1alpha1.AccessToken{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "valid-token",
+			},
+			Spec: cerberusv1alpha1.AccessTokenSpec{
+				Priority: 50,
+			},
+		},
+		allowedServices: map[string]struct{}{
+			"SampleWebService": {},
+		},
+	}
+	(*authenticator.accessCache)["valid-token"] = tokenEntry
+
+	headers := http.Header{}
+	headers.Set("X-Cerberus-Token", "valid-token")
+
+	request := &Request{
+		Context: map[string]string{
+			"webservice": "SampleWebService",
+		},
+		Request: http.Request{
+			Header: headers,
+		},
+	}
+
+	webservice := ServicesCacheEntry{
+		cerberusv1alpha1.WebService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "SampleWebService",
+			},
+			Spec: cerberusv1alpha1.WebServiceSpec{
+				LookupHeader:         "X-Cerberus-Token",
+				MinimumTokenPriority: 100,
+			},
+		},
+	}
+
+	(*authenticator.servicesCache)["SampleWebService"] = webservice
+
+	ok, reason, extraHeaders := authenticator.TestAccess(request, webservice)
+
+	assert.False(t, ok, "Expected access to be denied")
+	assert.Equal(t, CerberusReasonAccessLimited, reason, "Expected reason to be AccessLimited")
+	assert.Empty(t, extraHeaders, "Expected no extra headers for AccessLimited")
+}
+
 func setupTestEnvironment(t *testing.T) (client.Client, *Authenticator) {
 	// Initialize a Kubernetes client's scheme.
 	scheme := runtime.NewScheme()

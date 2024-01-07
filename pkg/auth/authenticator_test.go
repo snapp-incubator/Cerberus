@@ -208,12 +208,12 @@ func TestReadToken(t *testing.T) {
 	webservice := ServicesCacheEntry{
 		cerberusv1alpha1.WebService{
 			Spec: cerberusv1alpha1.WebServiceSpec{
-				LookupHeader: "X-Cerberus-Token",
+				LookupHeader: string(CerberusHeaderAccessToken),
 			},
 		},
 	}
 
-	request.Request.Header.Set("X-Cerberus-Token", "test-token")
+	request.Request.Header.Set(string(CerberusHeaderAccessToken), "test-token")
 
 	ok, reason, token := authenticator.readToken(request, webservice)
 
@@ -274,7 +274,7 @@ func TestTestAccessValidToken(t *testing.T) {
 	(*authenticator.accessCache)["valid-token"] = tokenEntry
 
 	headers := http.Header{}
-	headers.Set("X-Cerberus-Token", "valid-token")
+	headers.Set(string(CerberusHeaderAccessToken), "valid-token")
 
 	request := &Request{
 		Context: map[string]string{
@@ -291,7 +291,7 @@ func TestTestAccessValidToken(t *testing.T) {
 				Name: "SampleWebService",
 			},
 			Spec: cerberusv1alpha1.WebServiceSpec{
-				LookupHeader: "X-Cerberus-Token",
+				LookupHeader: string(CerberusHeaderAccessToken),
 			},
 		},
 	}
@@ -301,7 +301,7 @@ func TestTestAccessValidToken(t *testing.T) {
 
 	assert.True(t, ok, "Expected access to be granted")
 	assert.Equal(t, CerberusReasonOK, reason, "Expected reason to be OK")
-	assert.Equal(t, "valid-token", extraHeaders["X-Cerberus-AccessToken"], "Expected token in extraHeaders")
+	assert.Equal(t, "valid-token", extraHeaders[CerberusHeaderAccessToken], "Expected token in extraHeaders")
 }
 
 func TestTestAccessInvalidToken(t *testing.T) {
@@ -349,7 +349,7 @@ func TestTestAccessEmptyToken(t *testing.T) {
 	}
 
 	headers := http.Header{}
-	headers.Set("X-Cerberus-Token", "")
+	headers.Set(string(CerberusHeaderAccessToken), "")
 
 	request := &Request{
 		Context: map[string]string{
@@ -366,7 +366,7 @@ func TestTestAccessEmptyToken(t *testing.T) {
 				Name: "SampleWebService",
 			},
 			Spec: cerberusv1alpha1.WebServiceSpec{
-				LookupHeader: "X-Cerberus-Token",
+				LookupHeader: string(CerberusHeaderAccessToken),
 			},
 		},
 	}
@@ -403,7 +403,7 @@ func TestTestAccessBadIPList(t *testing.T) {
 
 	// Assuming an IP not in the allow list
 	headers := http.Header{}
-	headers.Set("X-Cerberus-Token", "valid-token")
+	headers.Set(string(CerberusHeaderAccessToken), "valid-token")
 	headers.Set("X-Forwarded-For", "192.168.1.3")
 
 	request := &Request{
@@ -422,7 +422,7 @@ func TestTestAccessBadIPList(t *testing.T) {
 				Name: "SampleWebService",
 			},
 			Spec: cerberusv1alpha1.WebServiceSpec{
-				LookupHeader: "X-Cerberus-Token",
+				LookupHeader: string(CerberusHeaderAccessToken),
 			},
 		},
 	}
@@ -459,7 +459,7 @@ func TestTestAccessLimited(t *testing.T) {
 	(*authenticator.accessCache)["valid-token"] = tokenEntry
 
 	headers := http.Header{}
-	headers.Set("X-Cerberus-Token", "valid-token")
+	headers.Set(string(CerberusHeaderAccessToken), "valid-token")
 
 	request := &Request{
 		Context: map[string]string{
@@ -476,7 +476,7 @@ func TestTestAccessLimited(t *testing.T) {
 				Name: "SampleWebService",
 			},
 			Spec: cerberusv1alpha1.WebServiceSpec{
-				LookupHeader:         "X-Cerberus-Token",
+				LookupHeader:         string(CerberusHeaderAccessToken),
 				MinimumTokenPriority: 100,
 			},
 		},
@@ -488,7 +488,10 @@ func TestTestAccessLimited(t *testing.T) {
 
 	assert.False(t, ok, "Expected access to be denied")
 	assert.Equal(t, CerberusReasonAccessLimited, reason, "Expected reason to be AccessLimited")
-	assert.Empty(t, extraHeaders, "Expected no extra headers for AccessLimited")
+	assert.Equal(t, extraHeaders[CerberusHeaderAccessLimitReason], TokenPriorityLowerThanServiceMinAccessLimit)
+	assert.Equal(t, extraHeaders[CerberusHeaderTokenPriority], fmt.Sprint(tokenEntry.Spec.Priority))
+	assert.Equal(t, extraHeaders[CerberusHeaderWebServiceMinPriority], fmt.Sprint(webservice.Spec.MinimumTokenPriority))
+
 }
 
 func setupTestEnvironment(t *testing.T) (client.Client, *Authenticator) {
@@ -558,11 +561,11 @@ func prepareWebservices(count int) []cerberusv1alpha1.WebService {
 		webservices[i] = cerberusv1alpha1.WebService{
 			ObjectMeta: metav1.ObjectMeta{Name: webserviceName, Namespace: "default"},
 			Spec: cerberusv1alpha1.WebServiceSpec{
-				LookupHeader: "X-Cerberus-Token",
+				LookupHeader: string(CerberusHeaderAccessToken),
 				UpstreamHttpAuth: cerberusv1alpha1.UpstreamHttpAuthService{
 					Address:       "http://example.com/auth",
 					ReadTokenFrom: "Authorization",
-					WriteTokenTo:  "X-Cerberus-Token",
+					WriteTokenTo:  string(CerberusHeaderAccessToken),
 				},
 			},
 		}

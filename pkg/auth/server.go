@@ -44,7 +44,7 @@ func (a *authV2) Check(ctx context.Context, check *CheckRequestV2) (*CheckRespon
 	final_response := response.AsV2()
 
 	// update metrics
-	reason := CerberusReason(response.Response.Header.Get("X-Cerberus-Reason"))
+	reason := CerberusReason(response.Response.Header.Get(CerberusHeaderReasonHeader))
 	labels := AddReasonLabel(nil, reason)
 	labels = AddUpstreamAuthLabel(labels, request.Context[HasUpstreamAuth])
 	labels[CheckRequestVersionLabel] = MetricsCheckRequestVersion2
@@ -70,7 +70,7 @@ func (a *authV3) Check(ctx context.Context, check *CheckRequestV3) (*CheckRespon
 	final_response := response.AsV3()
 
 	// update metrics
-	reason := CerberusReason(response.Response.Header.Get("X-Cerberus-Reason"))
+	reason := CerberusReason(response.Response.Header.Get(CerberusHeaderReasonHeader))
 	labels := AddReasonLabel(nil, reason)
 	labels = AddUpstreamAuthLabel(labels, request.Context[HasUpstreamAuth])
 	labels[CheckRequestVersionLabel] = MetricsCheckRequestVersion3

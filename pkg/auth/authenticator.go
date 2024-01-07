@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -36,9 +37,6 @@ type Authenticator struct {
 	cacheLock  sync.RWMutex
 	updateLock sync.Mutex
 }
-
-// ExtraHeaders are headers which will be added to the response
-type ExtraHeaders map[string]string
 
 // AccessCache is where Authenticator holds its authentication data,
 // under the hood it is a Map from RawTokens to some information about
@@ -143,6 +141,36 @@ const (
 	// CerberusReasonUpstreamAuthNoReq means that cerberus failed to create
 	// request for specified upstream auth
 	CerberusReasonUpstreamAuthNoReq CerberusReason = "upstream-auth-no-request"
+)
+
+// ExtraHeaders are headers which will be added to the response
+type ExtraHeaders map[string]string
+
+// ExtraHeaders setting generally
+const (
+	CerberusHeaderReasonHeader string = "X-Cerberus-Reason"
+	ExternalAuthHandlerHeader  string = "X-Auth-Handler"
+)
+
+// CerberusHeaderName is the type which is used to identifies header name
+type CerberusHeaderName string
+
+// CerberusExtraHeaders are headers which will be added to the response starting
+// with X-Cerberus-* this headers also will be set Test function
+type CerberusExtraHeaders map[CerberusHeaderName]string
+
+const (
+	CerberusHeaderAccessLimitReason     CerberusHeaderName = "X-Cerberus-Access-Limit-Reason"
+	CerberusHeaderTokenPriority         CerberusHeaderName = "X-Cerberus-Token-Priority"
+	CerberusHeaderWebServiceMinPriority CerberusHeaderName = "X-Cerberus-Webservice-Min-Priority"
+	CerberusHeaderAccessToken           CerberusHeaderName = "X-Cerberus-AccessToken"
+)
+
+// Access limit reasons
+const (
+	//TokenPriorityLowerThanServiceMinAccessLimit is the value to be set on CerberusHeaderAccessLimitReason
+	// header when load-shedding is done due token priority values
+	TokenPriorityLowerThanServiceMinAccessLimit string = "TokenPriorityLowerThanServiceMinimum"
 )
 
 //+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=accesstokens,verbs=get;list;watch;
@@ -267,8 +295,8 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 
 // TestAccess will check if given AccessToken (identified by raw token in the request)
 // has access to given Webservice (identified by its name) and returns proper CerberusReason
-func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (bool, CerberusReason, ExtraHeaders) {
-	newExtraHeaders := make(ExtraHeaders)
+func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (bool, CerberusReason, CerberusExtraHeaders) {
+	newExtraHeaders := make(CerberusExtraHeaders)
 	ok, reason, token := a.readToken(request, wsvc)
 	if !ok {
 		return false, reason, newExtraHeaders
@@ -287,8 +315,12 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 	if !ok {
 		return false, CerberusReasonTokenNotFound, newExtraHeaders
 	}
-
-	if (*a.accessCache)[token].Spec.Priority < wsvc.Spec.MinimumTokenPriority {
+	priority := (*a.accessCache)[token].Spec.Priority
+	minPriority := wsvc.Spec.MinimumTokenPriority
+	if priority < minPriority {
+		newExtraHeaders[CerberusHeaderAccessLimitReason] = TokenPriorityLowerThanServiceMinAccessLimit
+		newExtraHeaders[CerberusHeaderTokenPriority] = fmt.Sprint(priority)
+		newExtraHeaders[CerberusHeaderWebServiceMinPriority] = fmt.Sprint(minPriority)
 		return false, CerberusReasonAccessLimited, newExtraHeaders
 	}
 
@@ -338,7 +370,7 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 		}
 	}
 
-	newExtraHeaders["X-Cerberus-AccessToken"] = ac.ObjectMeta.Name
+	newExtraHeaders[CerberusHeaderAccessToken] = ac.ObjectMeta.Name
 
 	if _, ok := (*a.accessCache)[token].allowedServices[wsvc.Name]; !ok {
 		return false, CerberusReasonUnauthorized, newExtraHeaders
@@ -375,6 +407,14 @@ func (a *Authenticator) readService(wsvc string) (bool, CerberusReason, Services
 	return true, "", res
 }
 
+func toExtraHeaders(headers CerberusExtraHeaders) ExtraHeaders {
+	extraHeaders := make(ExtraHeaders)
+	for key, value := range headers {
+		extraHeaders[string(key)] = value
+	}
+	return extraHeaders
+}
+
 // Check is the function which is used to Authenticate and Respond to gRPC envoy.CheckRequest
 func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response, error) {
 
@@ -385,7 +425,9 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response,
 
 	ok, reason, wsvcCacheEntry := a.readService(wsvc)
 	if ok {
-		ok, reason, extraHeaders = a.TestAccess(request, wsvcCacheEntry)
+		var cerberusExtraHeaders CerberusExtraHeaders
+		ok, reason, cerberusExtraHeaders = a.TestAccess(request, wsvcCacheEntry)
+		extraHeaders = toExtraHeaders(cerberusExtraHeaders)
 		if ok && hasUpstreamAuth(wsvcCacheEntry) {
 			request.Context[HasUpstreamAuth] = "true"
 			ok, reason = a.checkServiceUpstreamAuth(wsvcCacheEntry, request, &extraHeaders, ctx)
@@ -401,13 +443,13 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response,
 	response := http.Response{
 		StatusCode: httpStatusCode,
 		Header: http.Header{
-			"X-Auth-Handler":    {"cerberus"},
-			"X-Cerberus-Reason": {string(reason)},
+			ExternalAuthHandlerHeader:  {"cerberus"},
+			CerberusHeaderReasonHeader: {string(reason)},
 		},
 	}
 
 	for key, value := range extraHeaders {
-		response.Header.Add(key, value)
+		response.Header.Add(string(key), value)
 	}
 
 	var err error

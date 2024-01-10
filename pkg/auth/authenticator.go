@@ -31,8 +31,8 @@ type Authenticator struct {
 	logger     logr.Logger
 	httpClient *http.Client
 
-	accessCache   *AccessCache
-	servicesCache *ServicesCache
+	accessCache   *NamespacedAccessCache
+	servicesCache *NamespacedServiceCache
 
 	cacheLock  sync.RWMutex
 	updateLock sync.Mutex
@@ -43,9 +43,17 @@ type Authenticator struct {
 // AccessToken, see AccessCacheEntry for more information
 type AccessCache map[string]AccessCacheEntry
 
+// NamespacedAccessCache is a mapping of namespace strings to AccessCache objects,
+// providing a namespace-specific storage for authentication data.
+type NamespacedAccessCache map[string]AccessCache
+
 // ServicesCache will hold information about all listed and suppoerted
 // Webservices by the Authenticator
 type ServicesCache map[string]ServicesCacheEntry
+
+// NamespacedServiceCache is a mapping of namespace strings to ServicesCache objects,
+// serving as a comprehensive cache for web service information across different namespaces.
+type NamespacedServiceCache map[string]ServicesCache
 
 // AccessCacheEntry will hold all datas included in AccessToken manifest,
 // and it also holds a map[string]struct{} which holds name of Webservices
@@ -81,7 +89,15 @@ const (
 
 	// CerberusReasonLookupEmpty means that Webservice is empty in the
 	// provided request context
-	CerberusReasonLookupEmpty CerberusReason = "lookup-empty"
+	CerberusReasonWebserviceEmpty CerberusReason = "service-empty"
+
+	// CerberusReasonLookupEmpty means that Namespace is empty in the
+	// provided request context
+	CerberusReasonNamespcaeEmpty CerberusReason = "namespace-empty"
+
+	// CerberusReasonNamespaceNotFound means that given namespace is read
+	// from request context, but it is not listed by the Cerberus
+	CerberusReasonNamespaceNotFound CerberusReason = "namespace-not-found"
 
 	// CerberusReasonLookupIdentifierEmpty means that requested webservice
 	// does not contain Lookup information in its manifest
@@ -232,7 +248,9 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 		return err
 	}
 
-	// convert secret list to map for faster searchs
+	namespacedAccessCache := make(NamespacedAccessCache)
+	
+	// convert secret list to map for faster searches
 	secretValues := make(map[string]string)
 	for _, secret := range secrets.Items {
 		if t, ok := secret.Data["token"]; ok {
@@ -247,39 +265,57 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 		return "", false
 	}
 
-	newAccessCache := make(AccessCache)
 	rawToken := make(map[string]string)
 	for _, token := range tokens.Items {
 		if t, ok := accessTokenRawValue(&token); ok {
-			rawToken[token.Name] = t
-			newAccessCache[t] = AccessCacheEntry{
+			rawToken[token.Namespace + "." + token.Name] = t
+			namespace := string(token.Namespace)
+			// Check if AccessCache for this namespace already exists
+			if _, exists := namespacedAccessCache[namespace]; !exists {
+				// If not, create AccessCache for this namespace
+				namespacedAccessCache[namespace] = make(AccessCache)
+			}
+			namespacedAccessCache[namespace][t] = AccessCacheEntry{
 				AccessToken:     token,
 				allowedServices: make(map[string]struct{}),
 			}
 		}
 	}
-	accessCacheEntries.Set(float64(len(newAccessCache)))
+	var sumAccessCacheEntries int
+	for cache := range namespacedAccessCache{
+		sumAccessCacheEntries += len(cache)
+	}
+	accessCacheEntries.Set(float64(sumAccessCacheEntries))
 
 	for _, binding := range bindings.Items {
 		for _, subject := range binding.Spec.Subjects {
 			for _, webservice := range binding.Spec.Webservices {
-				if t, ok := rawToken[subject]; ok {
-					newAccessCache[t].allowedServices[webservice] = struct{}{}
+				if t, ok := rawToken[binding.Namespace + "." + subject]; ok {
+					namespacedAccessCache[binding.Namespace][t].allowedServices[webservice] = struct{}{}
 				}
 			}
 		}
 	}
 
-	newServicesCache := make(ServicesCache)
+	namespacedServiceCache := make(NamespacedServiceCache)
 	for _, webservice := range webservices.Items {
-		newServicesCache[webservice.Name] = ServicesCacheEntry{
+		namespace := string(webservice.Namespace)
+		if _, exists := namespacedServiceCache[namespace]; !exists {
+			// If not, create AccessCache for this namespace
+			namespacedServiceCache[namespace] = make(ServicesCache)
+		}
+		namespacedServiceCache[namespace][webservice.Name] = ServicesCacheEntry{
 			WebService: webservice,
 		}
 	}
-	webserviceCacheEntries.Set(float64(len(newServicesCache)))
+	var sumServicesCacheEntries int
+	for cache := range namespacedServiceCache{
+		sumServicesCacheEntries += len(cache)
+	}
+	webserviceCacheEntries.Set(float64(sumServicesCacheEntries))
 
 	// TODO: remove this line
-	a.logger.Info("new access cache", "accessCache", newAccessCache, "servicesCache", newServicesCache)
+	a.logger.Info("new access cache", "accessCache", namespacedAccessCache, "servicesCache", namespacedServiceCache)
 
 	cacheWriteLockRequestStartTime := time.Now()
 	a.cacheLock.Lock()
@@ -287,8 +323,8 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 	defer a.cacheLock.Unlock()
 
 	cacheWriteStartTime := time.Now()
-	a.accessCache = &newAccessCache
-	a.servicesCache = &newServicesCache
+	a.accessCache = &namespacedAccessCache
+	a.servicesCache = &namespacedServiceCache
 	cacheWriteTime.Observe(time.Since(cacheWriteStartTime).Seconds())
 	return nil
 }
@@ -311,11 +347,17 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 		return false, CerberusReasonTokenEmpty, newExtraHeaders
 	}
 
-	ac, ok := (*a.accessCache)[token]
+
+	namespaceAccessCache, ok := (*a.accessCache)[wsvc.Namespace]
+	if !ok {
+		return false, CerberusReasonNamespaceNotFound, newExtraHeaders
+	}
+
+	ac, ok := namespaceAccessCache[token]
 	if !ok {
 		return false, CerberusReasonTokenNotFound, newExtraHeaders
 	}
-	priority := (*a.accessCache)[token].Spec.Priority
+	priority := ac.Spec.Priority
 	minPriority := wsvc.Spec.MinimumTokenPriority
 	if priority < minPriority {
 		newExtraHeaders[CerberusHeaderAccessLimitReason] = TokenPriorityLowerThanServiceMinAccessLimit
@@ -372,7 +414,7 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 
 	newExtraHeaders[CerberusHeaderAccessToken] = ac.ObjectMeta.Name
 
-	if _, ok := (*a.accessCache)[token].allowedServices[wsvc.Name]; !ok {
+	if _, ok := ac.allowedServices[wsvc.Name]; !ok {
 		return false, CerberusReasonUnauthorized, newExtraHeaders
 	}
 	return true, CerberusReasonOK, newExtraHeaders
@@ -390,20 +432,30 @@ func (a *Authenticator) readToken(request *Request, wsvc ServicesCacheEntry) (bo
 
 // readService reads requested webservice from cache and
 // will return error if the object would not be found in cache
-func (a *Authenticator) readService(wsvc string) (bool, CerberusReason, ServicesCacheEntry) {
+func (a *Authenticator) readService(wsvc string, namespace string) (bool, CerberusReason, ServicesCacheEntry) {
 	a.cacheLock.RLock()
 	cacheReaders.Inc()
 	defer a.cacheLock.RUnlock()
 	defer cacheReaders.Dec()
 
-	if wsvc == "" {
-		return false, CerberusReasonLookupEmpty, ServicesCacheEntry{}
+	if namespace == "" {
+		return false, CerberusReasonNamespcaeEmpty, ServicesCacheEntry{}
 	}
 
-	res, ok := (*a.servicesCache)[wsvc]
+	namespaceCache, ok := (*a.servicesCache)[namespace]
+	if !ok {
+		return false, CerberusReasonNamespaceNotFound, ServicesCacheEntry{}
+	}
+
+	if wsvc == "" {
+		return false, CerberusReasonWebserviceEmpty, ServicesCacheEntry{}
+	}
+
+	res, ok := (namespaceCache)[wsvc]
 	if !ok {
 		return false, CerberusReasonWebserviceNotFound, ServicesCacheEntry{}
 	}
+
 	return true, "", res
 }
 
@@ -419,11 +471,12 @@ func toExtraHeaders(headers CerberusExtraHeaders) ExtraHeaders {
 func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response, error) {
 
 	wsvc := request.Context["webservice"]
+	namespace := request.Context["namespace"]
 	request.Context[HasUpstreamAuth] = "false"
 	var extraHeaders ExtraHeaders
 	var httpStatusCode int
 
-	ok, reason, wsvcCacheEntry := a.readService(wsvc)
+	ok, reason, wsvcCacheEntry := a.readService(wsvc, namespace)
 	if ok {
 		var cerberusExtraHeaders CerberusExtraHeaders
 		ok, reason, cerberusExtraHeaders = a.TestAccess(request, wsvcCacheEntry)

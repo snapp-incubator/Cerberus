@@ -139,13 +139,14 @@ func TestCheckDomainComplex(t *testing.T) {
 
 func TestReadService(t *testing.T) {
 	authenticator := &Authenticator{
-		accessCache:   &AccessCache{},
-		servicesCache: &ServicesCache{},
+		accessCache:   &NamespacedAccessCache{},
+		servicesCache: &NamespacedServicesCache{},
 	}
 
 	request := &Request{
 		Context: map[string]string{
 			"webservice": "SampleWebService",
+			"namespace": "test",
 		},
 		Request: http.Request{
 			Header: http.Header{},
@@ -161,26 +162,30 @@ func TestReadService(t *testing.T) {
 			},
 		},
 	}
+	ns := request.Context["namespace"]
 
-	(*authenticator.servicesCache)["SampleWebService"] = webservice
+	(*authenticator.servicesCache)[ns]["SampleWebService"] = webservice
 
 	request.Request.Header.Set("X-Cerberus-Token", "test-token")
 
 	wsvc := request.Context["webservice"]
+	
 
 	testCases := []struct {
 		wsvc               string
+		namespace		   string
 		expectedOk         bool
 		expectedReason     CerberusReason
 		expectedCacheEntry ServicesCacheEntry
 	}{
-		{wsvc, true, "", webservice},
-		{"nonexistent_service", false, CerberusReasonWebserviceNotFound, ServicesCacheEntry{}},
+		{wsvc, ns, true, "", webservice},
+		{"nonexistent_service", ns, false, CerberusReasonWebserviceNotFound, ServicesCacheEntry{}},
+		{wsvc, "no-ns", false, CerberusReasonNamespaceNotFound, ServicesCacheEntry{}},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.wsvc, func(t *testing.T) {
-			ok, reason, _ := authenticator.readService(tc.wsvc)
+			ok, reason, _ := authenticator.readService(tc.wsvc, tc.namespace)
 			if ok != tc.expectedOk {
 				t.Errorf("Expected success: %v, Got: %v", tc.expectedOk, ok)
 			}
@@ -257,8 +262,8 @@ func TestUpdateCache(t *testing.T) {
 
 func TestTestAccessValidToken(t *testing.T) {
 	authenticator := &Authenticator{
-		accessCache:   &AccessCache{},
-		servicesCache: &ServicesCache{},
+		accessCache:   &NamespacedAccessCache{},
+		servicesCache: &NamespacedServicesCache{},
 	}
 
 	tokenEntry := AccessCacheEntry{
@@ -271,7 +276,8 @@ func TestTestAccessValidToken(t *testing.T) {
 			"SampleWebService": {},
 		},
 	}
-	(*authenticator.accessCache)["valid-token"] = tokenEntry
+	ns := "test"
+	(*authenticator.accessCache)[ns]["valid-token"] = tokenEntry
 
 	headers := http.Header{}
 	headers.Set(string(CerberusHeaderAccessToken), "valid-token")
@@ -279,6 +285,7 @@ func TestTestAccessValidToken(t *testing.T) {
 	request := &Request{
 		Context: map[string]string{
 			"webservice": "SampleWebService",
+			"namespace": ns,
 		},
 		Request: http.Request{
 			Header: headers,
@@ -295,7 +302,7 @@ func TestTestAccessValidToken(t *testing.T) {
 			},
 		},
 	}
-	(*authenticator.servicesCache)["SampleWebService"] = webservice
+	(*authenticator.servicesCache)[ns]["SampleWebService"] = webservice
 
 	ok, reason, extraHeaders := authenticator.TestAccess(request, webservice)
 
@@ -306,16 +313,18 @@ func TestTestAccessValidToken(t *testing.T) {
 
 func TestTestAccessInvalidToken(t *testing.T) {
 	authenticator := &Authenticator{
-		accessCache:   &AccessCache{},
-		servicesCache: &ServicesCache{},
+		accessCache:   &NamespacedAccessCache{},
+		servicesCache: &NamespacedServicesCache{},
 	}
 
 	headers := http.Header{}
+	ns := "test"
 	headers.Set("X-Cerberus-Token", "invalid-token")
 
 	request := &Request{
 		Context: map[string]string{
 			"webservice": "SampleWebService",
+			"namespace": ns,
 		},
 		Request: http.Request{
 			Header: headers,
@@ -333,7 +342,7 @@ func TestTestAccessInvalidToken(t *testing.T) {
 		},
 	}
 
-	(*authenticator.servicesCache)["SampleWebService"] = webservice
+	(*authenticator.servicesCache)[ns]["SampleWebService"] = webservice
 
 	ok, reason, extraHeaders := authenticator.TestAccess(request, webservice)
 
@@ -344,16 +353,18 @@ func TestTestAccessInvalidToken(t *testing.T) {
 
 func TestTestAccessEmptyToken(t *testing.T) {
 	authenticator := &Authenticator{
-		accessCache:   &AccessCache{},
-		servicesCache: &ServicesCache{},
+		accessCache:   &NamespacedAccessCache{},
+		servicesCache: &NamespacedServicesCache{},
 	}
 
 	headers := http.Header{}
 	headers.Set(string(CerberusHeaderAccessToken), "")
 
+	ns := "test"
 	request := &Request{
 		Context: map[string]string{
 			"webservice": "SampleWebService",
+			"namespace": ns,
 		},
 		Request: http.Request{
 			Header: headers,
@@ -371,7 +382,7 @@ func TestTestAccessEmptyToken(t *testing.T) {
 		},
 	}
 
-	(*authenticator.servicesCache)["SampleWebService"] = webservice
+	(*authenticator.servicesCache)[ns]["SampleWebService"] = webservice
 
 	ok, reason, extraHeaders := authenticator.TestAccess(request, webservice)
 
@@ -382,10 +393,10 @@ func TestTestAccessEmptyToken(t *testing.T) {
 
 func TestTestAccessBadIPList(t *testing.T) {
 	authenticator := &Authenticator{
-		accessCache:   &AccessCache{},
-		servicesCache: &ServicesCache{},
+		accessCache:   &NamespacedAccessCache{},
+		servicesCache: &NamespacedServicesCache{},
 	}
-
+	ns := "test"
 	tokenEntry := AccessCacheEntry{
 		AccessToken: cerberusv1alpha1.AccessToken{
 			ObjectMeta: metav1.ObjectMeta{
@@ -399,7 +410,7 @@ func TestTestAccessBadIPList(t *testing.T) {
 			"SampleWebService": {},
 		},
 	}
-	(*authenticator.accessCache)["valid-token"] = tokenEntry
+	(*authenticator.accessCache)[ns]["valid-token"] = tokenEntry
 
 	// Assuming an IP not in the allow list
 	headers := http.Header{}
@@ -409,6 +420,7 @@ func TestTestAccessBadIPList(t *testing.T) {
 	request := &Request{
 		Context: map[string]string{
 			"webservice": "SampleWebService",
+			"namespace": ns,
 		},
 		Request: http.Request{
 			Header:     headers,
@@ -427,7 +439,7 @@ func TestTestAccessBadIPList(t *testing.T) {
 		},
 	}
 
-	(*authenticator.servicesCache)["SampleWebService"] = webservice
+	(*authenticator.servicesCache)[ns]["SampleWebService"] = webservice
 
 	ok, reason, extraHeaders := authenticator.TestAccess(request, webservice)
 
@@ -438,10 +450,10 @@ func TestTestAccessBadIPList(t *testing.T) {
 
 func TestTestAccessLimited(t *testing.T) {
 	authenticator := &Authenticator{
-		accessCache:   &AccessCache{},
-		servicesCache: &ServicesCache{},
+		accessCache:   &NamespacedAccessCache{},
+		servicesCache: &NamespacedServicesCache{},
 	}
-
+	ns := "test"
 	// Assuming an a token with lower Priority than WebService threshold
 	tokenEntry := AccessCacheEntry{
 		AccessToken: cerberusv1alpha1.AccessToken{
@@ -456,7 +468,7 @@ func TestTestAccessLimited(t *testing.T) {
 			"SampleWebService": {},
 		},
 	}
-	(*authenticator.accessCache)["valid-token"] = tokenEntry
+	(*authenticator.accessCache)[ns]["valid-token"] = tokenEntry
 
 	headers := http.Header{}
 	headers.Set(string(CerberusHeaderAccessToken), "valid-token")
@@ -482,7 +494,7 @@ func TestTestAccessLimited(t *testing.T) {
 		},
 	}
 
-	(*authenticator.servicesCache)["SampleWebService"] = webservice
+	(*authenticator.servicesCache)[ns]["SampleWebService"] = webservice
 
 	ok, reason, extraHeaders := authenticator.TestAccess(request, webservice)
 

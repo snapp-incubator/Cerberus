@@ -32,7 +32,7 @@ type Authenticator struct {
 	httpClient *http.Client
 
 	accessCache   *NamespacedAccessCache
-	servicesCache *NamespacedServiceCache
+	servicesCache *NamespacedServicesCache
 
 	cacheLock  sync.RWMutex
 	updateLock sync.Mutex
@@ -53,7 +53,7 @@ type ServicesCache map[string]ServicesCacheEntry
 
 // NamespacedServiceCache is a mapping of namespace strings to ServicesCache objects,
 // serving as a comprehensive cache for web service information across different namespaces.
-type NamespacedServiceCache map[string]ServicesCache
+type NamespacedServicesCache map[string]ServicesCache
 
 // AccessCacheEntry will hold all datas included in AccessToken manifest,
 // and it also holds a map[string]struct{} which holds name of Webservices
@@ -297,7 +297,7 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 		}
 	}
 
-	namespacedServiceCache := make(NamespacedServiceCache)
+	namespacedServiceCache := make(NamespacedServicesCache)
 	for _, webservice := range webservices.Items {
 		namespace := string(webservice.Namespace)
 		if _, exists := namespacedServiceCache[namespace]; !exists {

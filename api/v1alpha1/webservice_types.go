@@ -25,9 +25,6 @@ import (
 
 // WebServiceSpec defines the desired state of WebService
 type WebServiceSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
 	// +kubebuilder:default=X-Cerberus-Token
 	// +kubebuilder:validation:Pattern=^(X-[A-Za-z-]*[A-Za-z]|Authorization)$
 	// LookupHeader tells Cerberus which header should be used as the access token for authentication (case-sensitive).
@@ -101,6 +98,10 @@ type WebServiceList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []WebService `json:"items"`
+}
+
+func (w WebService) encodedName() string {
+	return w.Namespace + "/" + w.Name
 }
 
 func init() {

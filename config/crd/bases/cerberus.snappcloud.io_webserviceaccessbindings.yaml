@@ -38,8 +38,8 @@ spec:
               WebserviceAccessBinding
             properties:
               subjects:
-                description: Subjects are the name of AccessTokens which the access
-                  will be granted to
+                description: Subjects are the name of Namespaces which the access
+                  will be granted to their tokens
                 items:
                   type: string
                 type: array

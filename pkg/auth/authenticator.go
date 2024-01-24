@@ -13,12 +13,8 @@ import (
 
 	"github.com/asaskevich/govalidator"
 	"github.com/go-logr/logr"
-	cerberusv1alpha1 "github.com/snapp-incubator/Cerberus/api/v1alpha1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	v1 "k8s.io/api/core/v1"
 )
 
 // downstreamDeadlineOffset sets an offset to downstream deadline inorder
@@ -31,34 +27,11 @@ type Authenticator struct {
 	logger     logr.Logger
 	httpClient *http.Client
 
-	accessCache   *AccessCache
-	servicesCache *ServicesCache
+	accessTokensCache *AccessTokensCache
+	servicesCache     *ServicesCache
 
 	cacheLock  sync.RWMutex
 	updateLock sync.Mutex
-}
-
-// AccessCache is where Authenticator holds its authentication data,
-// under the hood it is a Map from RawTokens to some information about
-// AccessToken, see AccessCacheEntry for more information
-type AccessCache map[string]AccessCacheEntry
-
-// ServicesCache will hold information about all listed and suppoerted
-// Webservices by the Authenticator
-type ServicesCache map[string]ServicesCacheEntry
-
-// AccessCacheEntry will hold all datas included in AccessToken manifest,
-// and it also holds a map[string]struct{} which holds name of Webservices
-// which the given token has access to.
-type AccessCacheEntry struct {
-	cerberusv1alpha1.AccessToken
-	// limiter Limiter
-	allowedServices map[string]struct{}
-}
-
-// ServicesCacheEntry will hold all datas included in Webservice manifest
-type ServicesCacheEntry struct {
-	cerberusv1alpha1.WebService
 }
 
 // CerberusReason is the type which is used to identfies the reason
@@ -173,126 +146,6 @@ const (
 	TokenPriorityLowerThanServiceMinAccessLimit string = "TokenPriorityLowerThanServiceMinimum"
 )
 
-//+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=accesstokens,verbs=get;list;watch;
-//+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=accesstokens/status,verbs=get;
-//+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=webservices,verbs=get;list;watch;
-//+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=webservices/status,verbs=get;
-//+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=webserviceaccountbindings,verbs=get;list;watch;
-//+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=webserviceaccountbindings/status,verbs=get;
-//+kubebuilder:rbac:groups="",namespace='cerberus-operator-system',resources=secrets,verbs=get;list;watch;create;update;patch;delete
-
-// UpdateCache will accuire a lock on other UpdateCaches and will start to recreate
-// the entire AccessCache and WebserviceCaches (which contains all authentication information)
-func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOnly bool) error {
-	cacheUpdateCount.Inc()
-	cacheUpdateStartTime := time.Now()
-	defer func() {
-		cacheUpdateLatency.Observe(time.Since(cacheUpdateStartTime).Seconds())
-	}()
-
-	a.updateLock.Lock()
-	defer a.updateLock.Unlock()
-
-	var err error
-	tokens := &cerberusv1alpha1.AccessTokenList{}
-	secrets := &v1.SecretList{}
-	bindings := &cerberusv1alpha1.WebserviceAccessBindingList{}
-	webservices := &cerberusv1alpha1.WebServiceList{}
-
-	t := time.Now()
-	err = c.List(ctx, tokens)
-	fetchObjectListLatency.With(AddKindLabel(nil, MetricsKindAccessToken)).Observe(time.Since(t).Seconds())
-	if err != nil {
-		return err
-	}
-
-	t = time.Now()
-	err = c.List(ctx, bindings)
-	fetchObjectListLatency.With(AddKindLabel(nil, MetricsKindWebserviceAccessBinding)).Observe(time.Since(t).Seconds())
-	if err != nil {
-		return err
-	}
-
-	t = time.Now()
-	err = c.List(ctx, webservices)
-	fetchObjectListLatency.With(AddKindLabel(nil, MetricsKindWebservice)).Observe(time.Since(t).Seconds())
-	if err != nil {
-		return err
-	}
-	listOpts := &client.ListOptions{Namespace: "cerberus-operator-system"}
-
-	t = time.Now()
-	// TODO find cleaner way to select
-	err = c.List(ctx, secrets,
-		// client.MatchingLabels{"cerberus.snappcloud.io/secret": "true"},
-		listOpts,
-	)
-	fetchObjectListLatency.With(AddKindLabel(nil, MetricsKindSecret)).Observe(time.Since(t).Seconds())
-	if err != nil {
-		return err
-	}
-
-	// convert secret list to map for faster searchs
-	secretValues := make(map[string]string)
-	for _, secret := range secrets.Items {
-		if t, ok := secret.Data["token"]; ok {
-			secretValues[secret.Name] = string(t)
-		}
-	}
-
-	accessTokenRawValue := func(t *cerberusv1alpha1.AccessToken) (string, bool) {
-		if t, ok := secretValues[t.Namespace+"."+t.Name]; ok {
-			return t, ok
-		}
-		return "", false
-	}
-
-	newAccessCache := make(AccessCache)
-	rawToken := make(map[string]string)
-	for _, token := range tokens.Items {
-		if t, ok := accessTokenRawValue(&token); ok {
-			rawToken[token.Name] = t
-			newAccessCache[t] = AccessCacheEntry{
-				AccessToken:     token,
-				allowedServices: make(map[string]struct{}),
-			}
-		}
-	}
-	accessCacheEntries.Set(float64(len(newAccessCache)))
-
-	for _, binding := range bindings.Items {
-		for _, subject := range binding.Spec.Subjects {
-			for _, webservice := range binding.Spec.Webservices {
-				if t, ok := rawToken[subject]; ok {
-					newAccessCache[t].allowedServices[webservice] = struct{}{}
-				}
-			}
-		}
-	}
-
-	newServicesCache := make(ServicesCache)
-	for _, webservice := range webservices.Items {
-		newServicesCache[webservice.Name] = ServicesCacheEntry{
-			WebService: webservice,
-		}
-	}
-	webserviceCacheEntries.Set(float64(len(newServicesCache)))
-
-	// TODO: remove this line
-	a.logger.Info("new access cache", "accessCache", newAccessCache, "servicesCache", newServicesCache)
-
-	cacheWriteLockRequestStartTime := time.Now()
-	a.cacheLock.Lock()
-	cacheWriteLockWaitingTime.Observe(time.Since(cacheWriteLockRequestStartTime).Seconds())
-	defer a.cacheLock.Unlock()
-
-	cacheWriteStartTime := time.Now()
-	a.accessCache = &newAccessCache
-	a.servicesCache = &newServicesCache
-	cacheWriteTime.Observe(time.Since(cacheWriteStartTime).Seconds())
-	return nil
-}
-
 // TestAccess will check if given AccessToken (identified by raw token in the request)
 // has access to given Webservice (identified by its name) and returns proper CerberusReason
 func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (bool, CerberusReason, CerberusExtraHeaders) {
@@ -325,7 +178,7 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 	}
 
 	var referrer string
-	if len(ac.Spec.IpAllowList) > 0 {
+	if len(ac.Spec.AllowedIPs) > 0 {
 		ipList := make([]string, 0)
 
 		// Retrieve "x-forwarded-for" and "referrer" headers from the request
@@ -349,7 +202,7 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 
 		// Check if IgnoreIP is true, skip IP list check
 		if !wsvc.Spec.IgnoreIP {
-			ipAllowed, err := checkIP(ipList, ac.Spec.IpAllowList)
+			ipAllowed, err := checkIP(ipList, ac.Spec.AllowedIPs)
 			if err != nil {
 				return false, CerberusReasonBadIpList, newExtraHeaders
 			}
@@ -360,8 +213,8 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 	}
 
 	// Check if IgnoreDomain is true, skip domain list check
-	if !wsvc.Spec.IgnoreDomain && len(ac.Spec.DomainAllowList) > 0 && referrer != "" {
-		domainAllowed, err := CheckDomain(referrer, ac.Spec.DomainAllowList)
+	if !wsvc.Spec.IgnoreDomain && len(ac.Spec.AllowedDomains) > 0 && referrer != "" {
+		domainAllowed, err := CheckDomain(referrer, ac.Spec.AllowedDomains)
 		if err != nil {
 			return false, CerberusReasonBadDomainList, newExtraHeaders
 		}

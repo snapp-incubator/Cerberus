@@ -25,10 +25,7 @@ import (
 
 // WebserviceAccessBindingSpec defines the desired state of WebserviceAccessBinding
 type WebserviceAccessBindingSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Subjects are the name of AccessTokens which the access will be granted to
+	// Subjects are the name of Namespaces which the access will be granted to their tokens
 	Subjects []string `json:"subjects,omitempty"`
 
 	// WebServices are the target service accesses

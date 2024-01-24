@@ -40,11 +40,10 @@ const (
 	SuspendedState AccessTokenState = "Suspended"
 )
 
+type WebserviceReference corev1.SecretReference
+
 // AccessTokenSpec defines the desired state of AccessToken
 type AccessTokenSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
 	// State shows the state of the token (whether you use token or it's just a draft)
 	// Valid values are:
 	// - "Active" (default): uses token in authorization procedure
@@ -53,26 +52,25 @@ type AccessTokenSpec struct {
 	// +optional
 	State AccessTokenState `json:"state,omitempty"`
 
-	// IP Allow List is a list of IP and IP CIDRs that will be tested against X-Forwarded-For
-	// +optional
-	IpAllowList []string `json:"ipAllowList,omitempty"`
-
-	// Domain Allow list is a list of Domain glob patterns that will be tested against Referer header
-	// +optional
-	DomainAllowList []string `json:"domainAllowList,omitempty"`
-
-	// Secret Ref points to secret containing the API Key secret
-	// if it exists it will use the token value in it and will create a new secret if not exists
-	TokenSecretRef *corev1.LocalObjectReference `json:"secretRef,omitempty"`
-
 	// Priority shows the access level of the token
 	// +kubebuilder:default=0
 	// +kubebuilder:validation:Minimum=0
 	// +optional
 	Priority int `json:"priority,omitempty"`
+
+	// AllowedIPs is a list of IP and IP CIDRs that will be tested against X-Forwarded-For
+	// +optional
+	AllowedIPs []string `json:"ipAllowList,omitempty"`
+
+	// AllowedDomains is a list of Domain glob patterns that will be tested against Referer header
+	// +optional
+	AllowedDomains []string `json:"domainAllowList,omitempty"`
+
+	// AllowedWebservices is a list of Webservice that the token has access to
+	// +optional
+	AllowedWebservices []*WebserviceReference `json:"allowedWebservices,omitempty"`
 }
 
-// TODO use AccessToken.Metadata.Name as TokenSecretRef
 // TODO next step: create copy of secret in AccessToken's namespace
 
 // AccessTokenStatus defines the observed state of AccessToken

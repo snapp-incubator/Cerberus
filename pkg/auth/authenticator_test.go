@@ -392,7 +392,7 @@ func TestTestAccessBadIPList(t *testing.T) {
 				Name: "valid-token",
 			},
 			Spec: cerberusv1alpha1.AccessTokenSpec{
-				IpAllowList: []string{"192.168.1.1", "192.168.1.2"},
+				AllowedIPs: []string{"192.168.1.1", "192.168.1.2"},
 			},
 		},
 		allowedServices: map[string]struct{}{
@@ -527,10 +527,9 @@ func prepareAccessTokens(count int) []cerberusv1alpha1.AccessToken {
 		accessTokens[i] = cerberusv1alpha1.AccessToken{
 			ObjectMeta: metav1.ObjectMeta{Name: tokenName},
 			Spec: cerberusv1alpha1.AccessTokenSpec{
-				State:           "active",
-				IpAllowList:     ipAllowList,
-				DomainAllowList: domainAllowList,
-				TokenSecretRef:  tokenSecretRef,
+				State:          "active",
+				AllowedIPs:     ipAllowList,
+				AllowedDomains: domainAllowList,
 			},
 		}
 	}

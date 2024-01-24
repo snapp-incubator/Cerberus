@@ -51,8 +51,8 @@ spec:
                 type: string
               minimumTokenPriority:
                 default: 0
-                description: MinimumTokenPriority tells Cerberus whether it should
-                  stablish the minimum priority threshold for token authentication
+                description: MinimumTokenPriority tells Cerberus what minimum priority
+                  it should stablish for token authentication
                 minimum: 0
                 type: integer
               upstreamHttpAuth:

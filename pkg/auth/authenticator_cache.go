@@ -112,7 +112,7 @@ func retrieveObjects[K client.ObjectList](
 	var result K
 	elemType := reflect.TypeOf(result).Elem()
 	newInstance := reflect.New(elemType).Elem()
-	// reflect.ValueOf(result).Elem().Set(newInstance)
+	reflect.ValueOf(result).Elem().Set(newInstance)
 	metricsLabel := reflect.TypeOf(newInstance).String()
 
 	err := c.List(ctx, result)

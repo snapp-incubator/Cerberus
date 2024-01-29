@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -100,8 +101,25 @@ type WebServiceList struct {
 	Items           []WebService `json:"items"`
 }
 
-func (w WebService) encodedName() string {
+type LocalWebserviceReference corev1.LocalObjectReference
+type WebserviceReference corev1.SecretReference
+
+func (w WebserviceReference) LocalName() string {
 	return w.Namespace + "/" + w.Name
+}
+
+func (w LocalWebserviceReference) LocalName(ns string) string {
+	return WebserviceReference{
+		Name:      w.Name,
+		Namespace: ns,
+	}.LocalName()
+}
+
+func (w WebService) LocalName() string {
+	return WebserviceReference{
+		Name:      w.Name,
+		Namespace: w.Namespace,
+	}.LocalName()
 }
 
 func init() {

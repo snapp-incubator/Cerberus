@@ -17,7 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -39,8 +38,6 @@ const (
 	// Cerberus won't include the token but it may become Active again
 	SuspendedState AccessTokenState = "Suspended"
 )
-
-type WebserviceReference corev1.SecretReference
 
 // AccessTokenSpec defines the desired state of AccessToken
 type AccessTokenSpec struct {

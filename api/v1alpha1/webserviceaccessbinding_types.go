@@ -29,7 +29,7 @@ type WebserviceAccessBindingSpec struct {
 	Subjects []string `json:"subjects,omitempty"`
 
 	// WebServices are the target service accesses
-	Webservices []string `json:"webservices,omitempty"`
+	Webservices []LocalWebserviceReference `json:"webservices,omitempty"`
 }
 
 // WebserviceAccessBindingStatus defines the observed state of WebserviceAccessBinding

@@ -13,6 +13,7 @@ import (
 
 	"github.com/asaskevich/govalidator"
 	"github.com/go-logr/logr"
+	"github.com/snapp-incubator/Cerberus/api/v1alpha1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -28,7 +29,7 @@ type Authenticator struct {
 	httpClient *http.Client
 
 	accessTokensCache *AccessTokensCache
-	servicesCache     *ServicesCache
+	webservicesCache  *WebservicesCache
 
 	cacheLock  sync.RWMutex
 	updateLock sync.Mutex
@@ -91,6 +92,14 @@ const (
 	// the request context is not listed by Cerberus
 	CerberusReasonWebserviceNotFound CerberusReason = "webservice-notfound"
 
+	// CerberusReasonWebserviceEmpty means that given webservice in
+	// the request context is empty or it's not given at all
+	CerberusReasonWebserviceEmpty CerberusReason = "webservice-empty"
+
+	// CerberusReasonWebserviceNamespaceEmpty means that given namespace of webservice in
+	// the request context is empty or it's not given at all
+	CerberusReasonWebserviceNamespaceEmpty CerberusReason = "webservice-namespace-empty"
+
 	// CerberusReasonInvalidUpstreamAddress means that requested webservice
 	// has an invalid upstream address in it's manifest
 	CerberusReasonInvalidUpstreamAddress CerberusReason = "invalid-auth-upstream"
@@ -148,11 +157,11 @@ const (
 
 // TestAccess will check if given AccessToken (identified by raw token in the request)
 // has access to given Webservice (identified by its name) and returns proper CerberusReason
-func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (bool, CerberusReason, CerberusExtraHeaders) {
-	newExtraHeaders := make(CerberusExtraHeaders)
-	ok, reason, token := a.readToken(request, wsvc)
-	if !ok {
-		return false, reason, newExtraHeaders
+func (a *Authenticator) TestAccess(request *Request, wsvc WebservicesCacheEntry) (reason CerberusReason, newExtraHeaders CerberusExtraHeaders) {
+	newExtraHeaders = make(CerberusExtraHeaders)
+	reason, token := a.readToken(request, wsvc)
+	if reason != "" {
+		return
 	}
 
 	a.cacheLock.RLock()
@@ -161,23 +170,53 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 	defer cacheReaders.Dec()
 
 	if token == "" {
-		return false, CerberusReasonTokenEmpty, newExtraHeaders
+		return
 	}
 
-	ac, ok := (*a.accessCache)[token]
+	ac, ok := a.accessTokensCache.ReadAccesstoken(token)
 	if !ok {
-		return false, CerberusReasonTokenNotFound, newExtraHeaders
+		return
 	}
-	priority := (*a.accessCache)[token].Spec.Priority
+
+	newExtraHeaders.set(CerberusHeaderAccessToken, ac.ObjectMeta.Name)
+
+	reason, h := a.testPriority(ac, wsvc)
+	newExtraHeaders.merge(h)
+	if reason != "" {
+		return
+	}
+
+	reason, h = a.testIPAccess(ac, wsvc, request)
+	newExtraHeaders.merge(h)
+	if reason != "" {
+		return
+	}
+
+	reason, h = a.testDomainAccess(ac, wsvc, request)
+	newExtraHeaders.merge(h)
+
+	if !ac.TestAccess(wsvc.Name) {
+		return
+	}
+	reason = CerberusReasonOK
+	return
+}
+
+func (a *Authenticator) testPriority(ac AccessTokensCacheEntry, wsvc WebservicesCacheEntry) (CerberusReason, CerberusExtraHeaders) {
+	newExtraHeaders := make(CerberusExtraHeaders)
+	priority := ac.Spec.Priority
 	minPriority := wsvc.Spec.MinimumTokenPriority
 	if priority < minPriority {
 		newExtraHeaders[CerberusHeaderAccessLimitReason] = TokenPriorityLowerThanServiceMinAccessLimit
 		newExtraHeaders[CerberusHeaderTokenPriority] = fmt.Sprint(priority)
 		newExtraHeaders[CerberusHeaderWebServiceMinPriority] = fmt.Sprint(minPriority)
-		return false, CerberusReasonAccessLimited, newExtraHeaders
+		return CerberusReasonAccessLimited, newExtraHeaders
 	}
+	return "", newExtraHeaders
+}
 
-	var referrer string
+func (a *Authenticator) testIPAccess(ac AccessTokensCacheEntry, wsvc WebservicesCacheEntry, request *Request) (CerberusReason, CerberusExtraHeaders) {
+	newExtraHeaders := make(CerberusExtraHeaders)
 	if len(ac.Spec.AllowedIPs) > 0 {
 		ipList := make([]string, 0)
 
@@ -187,16 +226,15 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 			ips := strings.Split(xForwardedFor, ", ")
 			ipList = append(ipList, ips...)
 		}
-		referrer = request.Request.Header.Get("referrer")
 
 		// Retrieve "remoteAddr" from the request
 		remoteAddr := request.Request.RemoteAddr
 		host, _, err := net.SplitHostPort(remoteAddr)
 		if err != nil {
-			return false, CerberusReasonInvalidSourceIp, newExtraHeaders
+			return CerberusReasonInvalidSourceIp, newExtraHeaders
 		}
 		if net.ParseIP(host) == nil {
-			return false, CerberusReasonEmptySourceIp, newExtraHeaders
+			return CerberusReasonEmptySourceIp, newExtraHeaders
 		}
 		ipList = append(ipList, host)
 
@@ -204,58 +242,55 @@ func (a *Authenticator) TestAccess(request *Request, wsvc ServicesCacheEntry) (b
 		if !wsvc.Spec.IgnoreIP {
 			ipAllowed, err := checkIP(ipList, ac.Spec.AllowedIPs)
 			if err != nil {
-				return false, CerberusReasonBadIpList, newExtraHeaders
+				return CerberusReasonBadIpList, newExtraHeaders
 			}
 			if !ipAllowed {
-				return false, CerberusReasonIpNotAllowed, newExtraHeaders
+				return CerberusReasonIpNotAllowed, newExtraHeaders
 			}
 		}
 	}
+	return "", newExtraHeaders
+}
+
+func (a *Authenticator) testDomainAccess(ac AccessTokensCacheEntry, wsvc WebservicesCacheEntry, request *Request) (CerberusReason, CerberusExtraHeaders) {
+	newExtraHeaders := make(CerberusExtraHeaders)
+	var referrer string
+	referrer = request.Request.Header.Get("referrer")
 
 	// Check if IgnoreDomain is true, skip domain list check
 	if !wsvc.Spec.IgnoreDomain && len(ac.Spec.AllowedDomains) > 0 && referrer != "" {
 		domainAllowed, err := CheckDomain(referrer, ac.Spec.AllowedDomains)
 		if err != nil {
-			return false, CerberusReasonBadDomainList, newExtraHeaders
+			return CerberusReasonBadDomainList, newExtraHeaders
 		}
 		if !domainAllowed {
-			return false, CerberusReasonDomainNotAllowed, newExtraHeaders
+			return CerberusReasonDomainNotAllowed, newExtraHeaders
 		}
 	}
-
-	newExtraHeaders[CerberusHeaderAccessToken] = ac.ObjectMeta.Name
-
-	if _, ok := (*a.accessCache)[token].allowedServices[wsvc.Name]; !ok {
-		return false, CerberusReasonUnauthorized, newExtraHeaders
-	}
-	return true, CerberusReasonOK, newExtraHeaders
+	return "", newExtraHeaders
 }
 
 // readToken reads token from given Request object and
 // will return error if it not exists at expected header
-func (a *Authenticator) readToken(request *Request, wsvc ServicesCacheEntry) (bool, CerberusReason, string) {
+func (a *Authenticator) readToken(request *Request, wsvc WebservicesCacheEntry) (CerberusReason, string) {
 	if wsvc.Spec.LookupHeader == "" {
-		return false, CerberusReasonLookupIdentifierEmpty, ""
+		return CerberusReasonLookupIdentifierEmpty, ""
 	}
 	token := request.Request.Header.Get(wsvc.Spec.LookupHeader)
-	return true, "", token
+	return "", token
 }
 
 // readService reads requested webservice from cache and
 // will return error if the object would not be found in cache
-func (a *Authenticator) readService(wsvc string) (bool, CerberusReason, ServicesCacheEntry) {
+func (a *Authenticator) readService(wsvc string) (bool, CerberusReason, WebservicesCacheEntry) {
 	a.cacheLock.RLock()
 	cacheReaders.Inc()
 	defer a.cacheLock.RUnlock()
 	defer cacheReaders.Dec()
 
-	if wsvc == "" {
-		return false, CerberusReasonLookupEmpty, ServicesCacheEntry{}
-	}
-
-	res, ok := (*a.servicesCache)[wsvc]
+	res, ok := a.webservicesCache.ReadWebservice(wsvc)
 	if !ok {
-		return false, CerberusReasonWebserviceNotFound, ServicesCacheEntry{}
+		return false, CerberusReasonWebserviceNotFound, WebservicesCacheEntry{}
 	}
 	return true, "", res
 }
@@ -270,39 +305,27 @@ func toExtraHeaders(headers CerberusExtraHeaders) ExtraHeaders {
 
 // Check is the function which is used to Authenticate and Respond to gRPC envoy.CheckRequest
 func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response, error) {
+	wsvc, ns, reason := readRequestContext(request)
+	if reason != "" {
+		return generateResponse(false, reason, nil), nil
+	}
+	wsvc = v1alpha1.WebserviceReference{
+		Name:      wsvc,
+		Namespace: ns,
+	}.LocalName()
 
-	wsvc := request.Context["webservice"]
 	request.Context[HasUpstreamAuth] = "false"
 	var extraHeaders ExtraHeaders
-	var httpStatusCode int
 
 	ok, reason, wsvcCacheEntry := a.readService(wsvc)
 	if ok {
 		var cerberusExtraHeaders CerberusExtraHeaders
-		ok, reason, cerberusExtraHeaders = a.TestAccess(request, wsvcCacheEntry)
+		reason, cerberusExtraHeaders = a.TestAccess(request, wsvcCacheEntry)
 		extraHeaders = toExtraHeaders(cerberusExtraHeaders)
-		if ok && hasUpstreamAuth(wsvcCacheEntry) {
+		if reason == CerberusReasonOK && hasUpstreamAuth(wsvcCacheEntry) {
 			request.Context[HasUpstreamAuth] = "true"
 			ok, reason = a.checkServiceUpstreamAuth(wsvcCacheEntry, request, &extraHeaders, ctx)
 		}
-	}
-
-	if ok {
-		httpStatusCode = http.StatusOK
-	} else {
-		httpStatusCode = http.StatusUnauthorized
-	}
-
-	response := http.Response{
-		StatusCode: httpStatusCode,
-		Header: http.Header{
-			ExternalAuthHandlerHeader:  {"cerberus"},
-			CerberusHeaderReasonHeader: {string(reason)},
-		},
-	}
-
-	for key, value := range extraHeaders {
-		response.Header.Add(string(key), value)
 	}
 
 	var err error
@@ -310,10 +333,21 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response,
 		err = status.Error(codes.DeadlineExceeded, "Timeout exceeded")
 	}
 
-	return &Response{
-		Allow:    ok,
-		Response: response,
-	}, err
+	return generateResponse(ok, reason, extraHeaders), err
+}
+
+func readRequestContext(request *Request) (wsvc string, ns string, reason CerberusReason) {
+	wsvc = request.Context["webservice"]
+	if wsvc == "" {
+		return "", "", CerberusReasonWebserviceEmpty
+	}
+
+	ns = request.Context["namespace"]
+	if ns == "" {
+		return "", "", CerberusReasonWebserviceNamespaceEmpty
+	}
+
+	return
 }
 
 // NewAuthenticator creates new Authenticator object with given logger.
@@ -366,7 +400,7 @@ func CheckDomain(domain string, domainAllowedList []string) (bool, error) {
 
 // checkServiceUpstreamAuth function is designed to validate the request through
 // the upstream authentication for a given webservice
-func (a *Authenticator) checkServiceUpstreamAuth(service ServicesCacheEntry, request *Request, extraHeaders *ExtraHeaders, ctx context.Context) (bool, CerberusReason) {
+func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, request *Request, extraHeaders *ExtraHeaders, ctx context.Context) (bool, CerberusReason) {
 	downstreamDeadline, hasDownstreamDeadline := ctx.Deadline()
 	serviceUpstreamAuthCalls.With(AddWithDownstreamDeadline(nil, hasDownstreamDeadline)).Inc()
 
@@ -434,6 +468,42 @@ func (a *Authenticator) checkServiceUpstreamAuth(service ServicesCacheEntry, req
 
 // hasUpstreamAuth evaluates whether the provided webservice
 // upstreamauth instance is considered empty or not
-func hasUpstreamAuth(service ServicesCacheEntry) bool {
+func hasUpstreamAuth(service WebservicesCacheEntry) bool {
 	return service.Spec.UpstreamHttpAuth.Address != ""
+}
+
+func generateResponse(ok bool, reason CerberusReason, extraHeaders ExtraHeaders) *Response {
+	var httpStatusCode int
+	if ok {
+		httpStatusCode = http.StatusOK
+	} else {
+		httpStatusCode = http.StatusUnauthorized
+	}
+
+	response := http.Response{
+		StatusCode: httpStatusCode,
+		Header: http.Header{
+			ExternalAuthHandlerHeader:  {"cerberus"},
+			CerberusHeaderReasonHeader: {string(reason)},
+		},
+	}
+
+	for key, value := range extraHeaders {
+		response.Header.Add(string(key), value)
+	}
+
+	return &Response{
+		Allow:    ok,
+		Response: response,
+	}
+}
+
+func (ch CerberusExtraHeaders) merge(h CerberusExtraHeaders) {
+	for key, value := range h {
+		ch[key] = value
+	}
+}
+
+func (ch CerberusExtraHeaders) set(key CerberusHeaderName, value string) {
+	ch[key] = value
 }

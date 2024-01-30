@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -25,9 +26,6 @@ import (
 
 // WebServiceSpec defines the desired state of WebService
 type WebServiceSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
 	// +kubebuilder:default=X-Cerberus-Token
 	// +kubebuilder:validation:Pattern=^(X-[A-Za-z-]*[A-Za-z]|Authorization)$
 	// LookupHeader tells Cerberus which header should be used as the access token for authentication (case-sensitive).
@@ -101,6 +99,27 @@ type WebServiceList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []WebService `json:"items"`
+}
+
+type LocalWebserviceReference corev1.LocalObjectReference
+type WebserviceReference corev1.SecretReference
+
+func (w WebserviceReference) LocalName() string {
+	return w.Namespace + "/" + w.Name
+}
+
+func (w LocalWebserviceReference) LocalName(ns string) string {
+	return WebserviceReference{
+		Name:      w.Name,
+		Namespace: ns,
+	}.LocalName()
+}
+
+func (w WebService) LocalName() string {
+	return WebserviceReference{
+		Name:      w.Name,
+		Namespace: w.Namespace,
+	}.LocalName()
 }
 
 func init() {

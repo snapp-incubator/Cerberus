@@ -35,15 +35,33 @@ spec:
           spec:
             description: AccessTokenSpec defines the desired state of AccessToken
             properties:
+              allowedWebservices:
+                description: AllowedWebservices is a list of Webservice that the token
+                  has access to
+                items:
+                  description: SecretReference represents a Secret Reference. It has
+                    enough information to retrieve secret in any namespace
+                  properties:
+                    name:
+                      description: name is unique within a namespace to reference
+                        a secret resource.
+                      type: string
+                    namespace:
+                      description: namespace defines the space within which the secret
+                        name must be unique.
+                      type: string
+                  type: object
+                  x-kubernetes-map-type: atomic
+                type: array
               domainAllowList:
-                description: Domain Allow list is a list of Domain glob patterns that
+                description: AllowedDomains is a list of Domain glob patterns that
                   will be tested against Referer header
                 items:
                   type: string
                 type: array
               ipAllowList:
-                description: IP Allow List is a list of IP and IP CIDRs that will
-                  be tested against X-Forwarded-For
+                description: AllowedIPs is a list of IP and IP CIDRs that will be
+                  tested against X-Forwarded-For
                 items:
                   type: string
                 type: array
@@ -52,17 +70,6 @@ spec:
                 description: Priority shows the access level of the token
                 minimum: 0
                 type: integer
-              secretRef:
-                description: Secret Ref points to secret containing the API Key secret
-                  if it exists it will use the token value in it and will create a
-                  new secret if not exists
-                properties:
-                  name:
-                    description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                      TODO: Add other useful fields. apiVersion, kind, uid?'
-                    type: string
-                type: object
-                x-kubernetes-map-type: atomic
               state:
                 description: 'State shows the state of the token (whether you use
                   token or it''s just a draft) Valid values are: - "Active" (default):

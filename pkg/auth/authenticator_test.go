@@ -424,7 +424,7 @@ func TestTestAccessBadIPList(t *testing.T) {
 	reason, extraHeaders := authenticator.TestAccess(request, webservice)
 
 	assert.Equal(t, CerberusReasonBadIpList, reason, "Expected reason to be BadIpList")
-	assert.Empty(t, extraHeaders, "Expected no extra headers for invalid IP")
+	assert.Equal(t, extraHeaders[CerberusHeaderAccessToken], "valid-token", "Expected AccessToken Name as a Header")
 }
 
 func TestTestAccessLimited(t *testing.T) {

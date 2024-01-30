@@ -170,11 +170,13 @@ func (a *Authenticator) TestAccess(request *Request, wsvc WebservicesCacheEntry)
 	defer cacheReaders.Dec()
 
 	if token == "" {
+		reason = CerberusReasonTokenEmpty
 		return
 	}
 
 	ac, ok := a.accessTokensCache.ReadAccesstoken(token)
 	if !ok {
+		reason = CerberusReasonTokenNotFound
 		return
 	}
 

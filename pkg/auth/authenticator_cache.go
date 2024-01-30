@@ -63,22 +63,26 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 	a.updateLock.Lock()
 	defer a.updateLock.Unlock()
 
-	tokens, err := retrieveObjects[*v1alpha1.AccessTokenList](c, ctx)
+	tokens := &v1alpha1.AccessTokenList{}
+	err = retrieveObjects(tokens, c, ctx)
 	if err != nil {
 		return
 	}
 
-	secrets, err := retrieveObjects[*corev1.SecretList](c, ctx)
+	secrets := &corev1.SecretList{}
+	err = retrieveObjects(secrets, c, ctx)
 	if err != nil {
 		return
 	}
 
-	bindings, err := retrieveObjects[*v1alpha1.WebserviceAccessBindingList](c, ctx)
+	bindings := &v1alpha1.WebserviceAccessBindingList{}
+	err = retrieveObjects(bindings, c, ctx)
 	if err != nil {
 		return
 	}
 
-	webservices, err := retrieveObjects[*v1alpha1.WebServiceList](c, ctx)
+	webservices := &v1alpha1.WebServiceList{}
+	err = retrieveObjects(webservices, c, ctx)
 	if err != nil {
 		return
 	}
@@ -100,24 +104,17 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 
 // retrieveObjects is a generic function which will list all the Objects matching given type
 // from API Server using given k8s client and ctx and returns a pointer to a list of them
-func retrieveObjects[K client.ObjectList](
+func retrieveObjects(
+	l client.ObjectList,
 	c client.Client,
 	ctx context.Context,
 	listOpts ...*client.ListOptions,
-) (
-	K, error,
-) {
+) error {
 	t := time.Now()
-
-	var result K
-	elemType := reflect.TypeOf(result).Elem()
-	newInstance := reflect.New(elemType).Elem()
-	reflect.ValueOf(result).Elem().Set(newInstance)
-	metricsLabel := reflect.TypeOf(newInstance).String()
-
-	err := c.List(ctx, result)
+	metricsLabel := reflect.TypeOf(l).Elem().String()
+	err := c.List(ctx, l)
 	fetchObjectListLatency.With(AddKindLabel(nil, metricsLabel)).Observe(time.Since(t).Seconds())
-	return result, err
+	return err
 }
 
 // buildNewWebservicesCache creates WebservicesCacheEntry for each webservice and then it

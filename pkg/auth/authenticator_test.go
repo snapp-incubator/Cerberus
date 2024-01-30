@@ -22,9 +22,9 @@ var (
 	domainAllowList = generateDomainAllowList(1000) // Generate a large domain allow list
 	testIP          = "192.168.0.1"                 // Use a valid IP for testing
 	testDomain      = "example.com"                 // Use a valid domain for testing
-	tokenSecretRef  = generateTokenSecretRef()
-	subjects        = generateSubjects(2)    // Generates ["subject-1", "subject-2"]
-	webservices     = generateWebservices(2) // Generates ["webservice-1", "webservice-2"]
+	subjects        = generateSubjects(2)           // Generates ["subject-1", "subject-2"]
+	webservices     = generateWebservices(2)        // Generates ["webservice-1", "webservice-2"]
+	// tokenSecretRef  = generateTokenSecretRef()
 
 )
 

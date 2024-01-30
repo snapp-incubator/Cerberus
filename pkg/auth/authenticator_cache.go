@@ -46,6 +46,7 @@ type AllowedNamespacesCache map[string]struct{}
 // UpdateCache will accuire a lock on other UpdateCaches and will start to recreate
 // the entire AccessCache and WebserviceCaches (which contains all authentication information)
 func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOnly bool) (err error) {
+	a.logger.Info("updated cache triggered")
 	cacheUpdateCount.Inc()
 	cacheUpdateStartTime := time.Now()
 	defer func() {
@@ -91,6 +92,7 @@ func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOn
 	a.accessTokensCache = newAccessCache
 	a.webservicesCache = newWebservicesCache
 	cacheWriteTime.Observe(time.Since(cacheWriteStartTime).Seconds())
+	a.logger.Info("updated cache successfully")
 	return nil
 }
 
@@ -132,11 +134,15 @@ func (a *Authenticator) buildNewWebservicesCache(
 	webserviceCacheEntries.Set(float64(len(newWebservicesCache)))
 
 	ignoredBindings := newWebservicesCache.buildAllowedNamespacesCache(bindings)
-	for name, wsvcs := range ignoredBindings {
-		a.logger.Info("ignored some webservices over binding",
-			"binding", name, "webservices", strings.Join(wsvcs, ","),
-		)
+	if len(ignoredBindings) > 0 {
+		for name, wsvcs := range ignoredBindings {
+			a.logger.Info("ignored some webservices over binding",
+				"binding", name, "webservices", strings.Join(wsvcs, ","),
+			)
+		}
 	}
+
+	a.logger.Info("webservice access cache built successfully", "len", len(newWebservicesCache))
 	return &newWebservicesCache
 }
 
@@ -186,11 +192,14 @@ func (a *Authenticator) buildNewAccessTokensCache(
 			result = append(result, wr.LocalName())
 		}
 		name, namespace := decodeLocalName(at)
-		a.logger.Info("some allowed webservices for token are ignored",
-			"accesstoken", name, "namespace", namespace, "ignored", strings.Join(result, ","),
-		)
+		if len(result) > 0 {
+			a.logger.Info("some allowed webservices for token are ignored",
+				"accesstoken", name, "namespace", namespace, "ignored", strings.Join(result, ","),
+			)
+		}
 	}
 
+	a.logger.Info("webservice access cache built successfully", "len", len(newAccessTokensCache))
 	return &newAccessTokensCache
 }
 

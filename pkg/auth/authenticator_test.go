@@ -47,10 +47,10 @@ func generateDomainAllowList(size int) []string {
 	return domainList
 }
 
-func generateTokenSecretRef() *corev1.LocalObjectReference {
-	example := &corev1.LocalObjectReference{Name: "example-token-secret-ref"}
-	return example
-}
+// func generateTokenSecretRef() *corev1.LocalObjectReference {
+// 	example := &corev1.LocalObjectReference{Name: "example-token-secret-ref"}
+// 	return example
+// }
 
 func generateSubjects(subjectCount int) []string {
 	subject := make([]string, subjectCount)

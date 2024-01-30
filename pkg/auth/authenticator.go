@@ -166,8 +166,7 @@ func (a *Authenticator) testIPAccess(ac AccessTokensCacheEntry, wsvc Webservices
 
 func (a *Authenticator) testDomainAccess(ac AccessTokensCacheEntry, wsvc WebservicesCacheEntry, request *Request) (CerberusReason, CerberusExtraHeaders) {
 	newExtraHeaders := make(CerberusExtraHeaders)
-	var referrer string
-	referrer = request.Request.Header.Get("referrer")
+	referrer := request.Request.Header.Get("referrer")
 
 	// Check if IgnoreDomain is true, skip domain list check
 	if !wsvc.Spec.IgnoreDomain && len(ac.Spec.AllowedDomains) > 0 && referrer != "" {

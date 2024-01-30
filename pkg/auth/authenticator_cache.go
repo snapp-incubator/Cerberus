@@ -43,14 +43,6 @@ type WebservicesCacheEntry struct {
 // AllowedNamespacesCache will hold all namespaces that are allowed to call this webservice
 type AllowedNamespacesCache map[string]struct{}
 
-//+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=accesstokens,verbs=get;list;watch;
-//+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=accesstokens/status,verbs=get;
-//+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=webservices,verbs=get;list;watch;
-//+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=webservices/status,verbs=get;
-//+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=webserviceaccountbindings,verbs=get;list;watch;
-//+kubebuilder:rbac:groups=cerberus.snappcloud.io,resources=webserviceaccountbindings/status,verbs=get;
-//+kubebuilder:rbac:groups="",namespace='cerberus-operator-system',resources=secrets,verbs=get;list;watch;create;update;patch;delete
-
 // UpdateCache will accuire a lock on other UpdateCaches and will start to recreate
 // the entire AccessCache and WebserviceCaches (which contains all authentication information)
 func (a *Authenticator) UpdateCache(c client.Client, ctx context.Context, readOnly bool) (err error) {

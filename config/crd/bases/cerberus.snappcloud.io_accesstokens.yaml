@@ -35,6 +35,18 @@ spec:
           spec:
             description: AccessTokenSpec defines the desired state of AccessToken
             properties:
+              allowedDomains:
+                description: AllowedDomains is a list of Domain glob patterns that
+                  will be tested against Referer header
+                items:
+                  type: string
+                type: array
+              allowedIPs:
+                description: AllowedIPs is a list of IP and IP CIDRs that will be
+                  tested against X-Forwarded-For
+                items:
+                  type: string
+                type: array
               allowedWebservices:
                 description: AllowedWebservices is a list of Webservice that the token
                   has access to
@@ -52,18 +64,6 @@ spec:
                       type: string
                   type: object
                   x-kubernetes-map-type: atomic
-                type: array
-              domainAllowList:
-                description: AllowedDomains is a list of Domain glob patterns that
-                  will be tested against Referer header
-                items:
-                  type: string
-                type: array
-              ipAllowList:
-                description: AllowedIPs is a list of IP and IP CIDRs that will be
-                  tested against X-Forwarded-For
-                items:
-                  type: string
                 type: array
               priority:
                 default: 0

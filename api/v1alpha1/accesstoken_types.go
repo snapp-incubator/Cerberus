@@ -57,11 +57,11 @@ type AccessTokenSpec struct {
 
 	// AllowedIPs is a list of IP and IP CIDRs that will be tested against X-Forwarded-For
 	// +optional
-	AllowedIPs []string `json:"ipAllowList,omitempty"`
+	AllowedIPs []string `json:"allowedIPs,omitempty"`
 
 	// AllowedDomains is a list of Domain glob patterns that will be tested against Referer header
 	// +optional
-	AllowedDomains []string `json:"domainAllowList,omitempty"`
+	AllowedDomains []string `json:"allowedDomains,omitempty"`
 
 	// AllowedWebservices is a list of Webservice that the token has access to
 	// +optional

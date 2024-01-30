@@ -19,5 +19,6 @@ metadata:
   name: accesstoken-sample
 spec:
   state: Active
-  secretRef:
-    name: "cerberus-operator-system.accesstoken-sample"
+  allowedWebservices:
+    - namespace: cerberus-operator-system
+      name: webservice-sample

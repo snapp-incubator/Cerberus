@@ -12,4 +12,4 @@ spec:
   subjects:
     - accesstoken-sample
   webservices:
-    - webservice-sample
+    - name: webservice-sample

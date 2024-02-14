@@ -10,6 +10,10 @@ const (
 	// OTHER THAN CerberusReasonOK means that the request is NOT authenticated
 	CerberusReasonOK CerberusReason = "ok"
 
+	// CerberusReasonNotSet means no reason is set during checks and it means
+	// the process should continue to find the reason
+	CerberusReasonNotSet CerberusReason = ""
+
 	// CerberusReasonUnauthorized means that given AccessToken is found but
 	// it does NOT have access to requested Webservice
 	CerberusReasonUnauthorized CerberusReason = "unauthorized"
@@ -60,6 +64,10 @@ const (
 	// CerberusReasonWebserviceEmpty means that given webservice in
 	// the request context is empty or it's not given at all
 	CerberusReasonWebserviceEmpty CerberusReason = "webservice-empty"
+
+	// CerberusReasonWebserviceNotAllowed means that given webservice in
+	// the request context is empty or it's not given at all
+	CerberusReasonWebserviceNotAllowed CerberusReason = "webservice-not-allowed"
 
 	// CerberusReasonWebserviceNamespaceEmpty means that given namespace of webservice in
 	// the request context is empty or it's not given at all

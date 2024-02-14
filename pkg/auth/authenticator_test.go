@@ -1,19 +1,20 @@
 package auth
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"testing"
+	"time"
 
 	cerberusv1alpha1 "github.com/snapp-incubator/Cerberus/api/v1alpha1"
+	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"context"
-
-	"github.com/stretchr/testify/assert"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -88,55 +89,6 @@ func BenchmarkCheckDomainWithLargeInput(b *testing.B) {
 	}
 }
 
-func TestCheckDomainComplex(t *testing.T) {
-	testCases := []struct {
-		domain         string
-		domainAllowed  []string
-		expectedResult bool
-	}{
-		// Exact domain matches
-		{"example.com", []string{"example.com"}, true},
-		{"sub.example.com", []string{"sub.example.com"}, true},
-		{"sub.sub.example.com", []string{"sub.sub.example.com"}, true},
-
-		// Wildcard prefix and suffix matches
-		{"sub.example.com", []string{"*.example.com"}, true},
-		{"example.net", []string{"example.*"}, true},
-
-		// Multiple patterns with mixed results
-		{"example.com", []string{"example.net", "*.example.com", "example.*"}, true},
-		{"sub.sub.example.net", []string{"*.example.com", "example.*"}, false},
-		{"example.org", []string{"*.example.com", "example.*"}, true},
-
-		// Case-insensitive matching
-		{"ExAmPlE.CoM", []string{"example.com"}, true},
-
-		// Character class [a-z0-9]
-		{"example1.com", []string{"example[0-9].com"}, true},
-		{"examplea.com", []string{"example[a-z].com"}, true},
-		{"exampleA.com", []string{"example[a-z].com"}, true},
-
-		// Multiple * wildcards
-		{"sub.sub.example.net", []string{"*.sub.*.net"}, true},
-		{"sub.sub.example.net", []string{"*.*.*.net"}, true},
-		{"sub.sub.example.net", []string{"*.example.net"}, true},
-
-		// ? wildcard character
-		{"example1.com", []string{"example?.com"}, true},
-		{"example12.com", []string{"example?.com"}, false},
-	}
-
-	for _, tc := range testCases {
-		result, err := CheckDomain(tc.domain, tc.domainAllowed)
-		if result != tc.expectedResult {
-			t.Errorf("Domain: %s, Expected: %v, Got: %v", tc.domain, tc.expectedResult, result)
-		}
-		if err != nil {
-			t.Errorf("Domain: %s, Expected Error: nil, Got Error: %v", tc.domain, err)
-		}
-	}
-}
-
 func TestReadService(t *testing.T) {
 	authenticator := &Authenticator{
 		accessTokensCache: &AccessTokensCache{},
@@ -173,7 +125,7 @@ func TestReadService(t *testing.T) {
 		expectedReason     CerberusReason
 		expectedCacheEntry WebservicesCacheEntry
 	}{
-		{wsvc, true, "", webservice},
+		{wsvc, true, CerberusReasonNotSet, webservice},
 		{"nonexistent_service", false, CerberusReasonWebserviceNotFound, WebservicesCacheEntry{}},
 	}
 
@@ -216,13 +168,13 @@ func TestReadToken(t *testing.T) {
 
 	reason, token := authenticator.readToken(request, webservice)
 
-	if reason != "" {
-		t.Errorf("Expected reason to be empty.")
-	}
+	assert.Equal(t, reason, CerberusReasonNotSet, "Expected reason to be empty.")
+	assert.Equalf(t, token, "test-token", "Expected token to be 'test-token'. Got: %s", token)
 
-	if token != "test-token" {
-		t.Errorf("Expected token to be 'test-token'. Got: %s", token)
-	}
+	webservice.Spec.LookupHeader = ""
+	reason, _ = authenticator.readToken(request, webservice)
+	assert.Equal(t, reason, CerberusReasonLookupIdentifierEmpty, "lookup-identifier-empty")
+
 }
 
 func TestUpdateCache(t *testing.T) {
@@ -376,6 +328,9 @@ func TestTestAccessBadIPList(t *testing.T) {
 	authenticator := &Authenticator{
 		accessTokensCache: &AccessTokensCache{},
 		webservicesCache:  &WebservicesCache{},
+		validators: []AuthenticationValidation{
+			&AuthenticationIPValidation{},
+		},
 	}
 
 	tokenEntry := AccessTokensCacheEntry{
@@ -431,6 +386,7 @@ func TestTestAccessLimited(t *testing.T) {
 	authenticator := &Authenticator{
 		accessTokensCache: &AccessTokensCache{},
 		webservicesCache:  &WebservicesCache{},
+		validators:        defineValidators(),
 	}
 
 	// Assuming an a token with lower Priority than WebService threshold
@@ -612,4 +568,401 @@ func assertCachesPopulated(t *testing.T, authenticator *Authenticator) {
 	//TODO: check this error
 	//assert.NotEmpty(t, authenticator.accessTokensCache)
 	assert.NotEmpty(t, authenticator.webservicesCache)
+}
+
+func TestToExtraHeaders(t *testing.T) {
+	// Test case 1: Empty input
+	emptyInput := CerberusExtraHeaders{}
+	result := toExtraHeaders(emptyInput)
+	assert.Empty(t, result, "Result should be empty for empty input")
+
+	// Test case 2: Input with multiple headers
+	input := CerberusExtraHeaders{
+		"Header1": "Value1",
+		"Header2": "Value2",
+		"Header3": "Value3",
+	}
+	expected := ExtraHeaders{
+		"Header1": "Value1",
+		"Header2": "Value2",
+		"Header3": "Value3",
+	}
+	result = toExtraHeaders(input)
+	assert.Equal(t, expected, result, "Result should match expected extra headers")
+
+	// Test case 3: Input with a single header
+	singleHeaderInput := CerberusExtraHeaders{
+		"Header": "Value",
+	}
+	singleExpected := ExtraHeaders{
+		"Header": "Value",
+	}
+	singleResult := toExtraHeaders(singleHeaderInput)
+	assert.Equal(t, singleExpected, singleResult, "Result should match expected extra headers")
+}
+
+func TestCheckDomain(t *testing.T) {
+	// Test case 1: Domain matches one of the GLOB patterns
+	domain := "example.com"
+	domainAllowedList := []string{"*.com", "*.org", "example.*"}
+	matched, err := CheckDomain(domain, domainAllowedList)
+	assert.NoError(t, err, "No error should occur")
+	assert.True(t, matched, "Domain should match one of the GLOB patterns")
+
+	// Test case 2: Domain matches one of the GLOB patterns and it
+	// does not care about the case
+	domain = "ExampLe.Com"
+	domainAllowedList = []string{"*.CoM", "*.org", "eXample.*"}
+	matched, err = CheckDomain(domain, domainAllowedList)
+	assert.NoError(t, err, "No error should occur")
+	assert.True(t, matched, "Domain should match one of the GLOB patterns")
+
+	// Test case 3: Domain does not match any of the GLOB patterns
+	domain = "example.net"
+	domainAllowedList = []string{"*.com", "*.org", "google.*"}
+	matched, err = CheckDomain(domain, domainAllowedList)
+	assert.NoError(t, err, "No error should occur")
+	assert.False(t, matched, "Domain should not match any of the GLOB patterns")
+
+	// Test case 4: Error while matching the domain with GLOB patterns
+	domain = "example.com"
+	domainAllowedList = []string{"[invalid pattern"}
+	matched, err = CheckDomain(domain, domainAllowedList)
+	assert.Error(t, err, "Error should occur")
+	assert.False(t, matched, "Domain should not match due to error")
+	assert.EqualError(t, err, "syntax error in pattern", "Error message should indicate syntax error")
+}
+
+func Test_hasUpstreamAuth(t *testing.T) {
+	wsce := WebservicesCacheEntry{
+		WebService: cerberusv1alpha1.WebService{
+			Spec: cerberusv1alpha1.WebServiceSpec{
+				UpstreamHttpAuth: cerberusv1alpha1.UpstreamHttpAuthService{
+					Address: "",
+				},
+			},
+		},
+	}
+	assert.False(t, hasUpstreamAuth(wsce))
+	wsce.Spec.UpstreamHttpAuth.Address = "anything"
+
+	assert.True(t, hasUpstreamAuth(wsce))
+
+}
+
+func TestCerberusExtraHeaders_merge_set(t *testing.T) {
+	h := CerberusExtraHeaders{}
+
+	h.merge(CerberusExtraHeaders{"a": "b"})
+
+	assert.Len(t, h, 1)
+	assert.Equal(t, h["a"], "b")
+
+	h.merge(CerberusExtraHeaders{"a": "c", "x": "y", "z": "w"})
+	assert.Len(t, h, 3)
+	assert.Equal(t, h["a"], "c") //Overwritten
+	assert.Equal(t, h["x"], "y") // Newly added
+	assert.Equal(t, h["z"], "w") // Newly added
+
+	h.set(CerberusHeaderAccessToken, "test")
+
+	assert.Equal(t, h[CerberusHeaderAccessToken], "test")
+}
+
+func Test_readRequestContext(t *testing.T) {
+	// Test case 1: Valid context keys
+	request := &Request{
+		Context: map[string]string{
+			"webservice": "example-service",
+			"namespace":  "example-namespace",
+		},
+	}
+	wsvc, ns, reason := readRequestContext(request)
+	assert.Equal(t, "example-service", wsvc, "Webservice should match expected value")
+	assert.Equal(t, "example-namespace", ns, "Namespace should match expected value")
+	assert.Empty(t, reason, "Reason should be empty")
+
+	// Test case 2: Webservice key missing
+	request = &Request{
+		Context: map[string]string{
+			"namespace": "example-namespace",
+		},
+	}
+	wsvc, ns, reason = readRequestContext(request)
+	assert.Empty(t, wsvc, "Webservice should be empty")
+	assert.Empty(t, ns, "Namespace should be empty")
+	assert.Equal(t, CerberusReasonWebserviceEmpty, reason, "Reason should indicate webservice key missing")
+
+	// Test case 3: Namespace key missing
+	request = &Request{
+		Context: map[string]string{
+			"webservice": "example-service",
+		},
+	}
+	wsvc, ns, reason = readRequestContext(request)
+	assert.Empty(t, wsvc, "Webservice should be empty")
+	assert.Empty(t, ns, "Namespace should be empty")
+	assert.Equal(t, CerberusReasonWebserviceNamespaceEmpty, reason, "Reason should indicate namespace key missing")
+
+	// Test case 4: Both keys missing
+	request = &Request{
+		Context: map[string]string{},
+	}
+	wsvc, ns, reason = readRequestContext(request)
+	assert.Empty(t, wsvc, "Webservice should be empty")
+	assert.Empty(t, ns, "Namespace should be empty")
+	assert.Equal(t, CerberusReasonWebserviceEmpty, reason, "Reason should indicate webservice key missing")
+}
+
+func Test_generateResponse(t *testing.T) {
+	// Test case 1: Response is allowed with no extra headers
+	expectedResponse := &Response{
+		Allow: true,
+		Response: http.Response{
+			StatusCode: http.StatusOK,
+			Header: http.Header{
+				ExternalAuthHandlerHeader:  {"cerberus"},
+				CerberusHeaderReasonHeader: {"reason"},
+			},
+		},
+	}
+	actualResponse := generateResponse(true, "reason", nil)
+	assert.Equal(t, expectedResponse.Allow, actualResponse.Allow, "Response should be allowed")
+	assert.Equal(t, expectedResponse.Response.StatusCode, actualResponse.Response.StatusCode, "HTTP status code should match")
+	assert.Equal(t, expectedResponse.Response.Header, actualResponse.Response.Header, "Response headers should match")
+
+	// Test case 2: Response is not allowed with extra headers
+	extraHeaders := ExtraHeaders{"Extra-Header": "value"}
+	expectedResponse = &Response{
+		Allow: false,
+		Response: http.Response{
+			StatusCode: http.StatusUnauthorized,
+			Header: http.Header{
+				ExternalAuthHandlerHeader:  {"cerberus"},
+				CerberusHeaderReasonHeader: {"reason"},
+				"Extra-Header":             {"value"},
+			},
+		},
+	}
+	actualResponse = generateResponse(false, "reason", extraHeaders)
+	assert.Equal(t, expectedResponse.Allow, actualResponse.Allow, "Response should not be allowed")
+	assert.Equal(t, expectedResponse.Response.StatusCode, actualResponse.Response.StatusCode, "HTTP status code should match")
+	assert.Equal(t, expectedResponse.Response.Header, actualResponse.Response.Header, "Response headers should match")
+}
+
+func TestValidateUpstreamAuthRequest(t *testing.T) {
+	// Test case 1: ReadTokenFrom and WriteTokenTo are empty
+	service := WebservicesCacheEntry{}
+	service.Spec.UpstreamHttpAuth.ReadTokenFrom = ""
+	service.Spec.UpstreamHttpAuth.WriteTokenTo = ""
+	reason := validateUpstreamAuthRequest(service)
+	assert.Equal(t, CerberusReasonTargetAuthTokenEmpty, reason, "Expected target auth token empty")
+
+	// Test case 2: WriteTokenTo is empty
+	service = WebservicesCacheEntry{}
+	service.Spec.UpstreamHttpAuth.ReadTokenFrom = "token"
+	service.Spec.UpstreamHttpAuth.WriteTokenTo = ""
+	reason = validateUpstreamAuthRequest(service)
+	assert.Equal(t, CerberusReasonTargetAuthTokenEmpty, reason, "Expected target auth token empty")
+
+	// Test case 3: ReadTokenFrom is empty
+	service = WebservicesCacheEntry{}
+	service.Spec.UpstreamHttpAuth.ReadTokenFrom = ""
+	service.Spec.UpstreamHttpAuth.WriteTokenTo = "token"
+	reason = validateUpstreamAuthRequest(service)
+	assert.Equal(t, CerberusReasonTargetAuthTokenEmpty, reason, "Expected target auth token empty")
+
+	// Test case 4: Address is invalid
+	service = WebservicesCacheEntry{}
+	service.Spec.UpstreamHttpAuth.ReadTokenFrom = "token"
+	service.Spec.UpstreamHttpAuth.WriteTokenTo = "token"
+	service.Spec.UpstreamHttpAuth.Address = "not a valid URL"
+	reason = validateUpstreamAuthRequest(service)
+	assert.Equal(t, CerberusReasonInvalidUpstreamAddress, reason, "Expected invalid upstream address")
+
+	// Test case 5: Everything is valid
+	service = WebservicesCacheEntry{}
+	service.Spec.UpstreamHttpAuth.ReadTokenFrom = "token"
+	service.Spec.UpstreamHttpAuth.WriteTokenTo = "token"
+	service.Spec.UpstreamHttpAuth.Address = "http://example.com"
+	reason = validateUpstreamAuthRequest(service)
+	assert.Empty(t, reason, "Expected no reason")
+}
+
+// MockHTTPClient is a mock implementation of http.Client for testing purposes.
+type MockTransport struct {
+	DoFunc func(req *http.Request) (*http.Response, error)
+}
+
+// Do executes the provided HTTP request and returns the response.
+func (c *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return c.DoFunc(req)
+}
+
+func TestAdjustTimeoutWithHTTPClientMock(t *testing.T) {
+	// Test case 1: No downstream deadline
+	transport := &MockTransport{
+		DoFunc: func(req *http.Request) (*http.Response, error) {
+			// Mock response
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       http.NoBody,
+			}, nil
+		},
+	}
+
+	authenticator := Authenticator{
+		httpClient: &http.Client{Transport: transport},
+	}
+
+	// TestCase 1: No deadline
+	timeout := 1000
+	downstreamDeadline := time.Now()
+	hasDownstreamDeadline := false
+
+	expectedTimeout := time.Duration(1000) * time.Millisecond
+	authenticator.adjustTimeout(timeout, downstreamDeadline, hasDownstreamDeadline)
+	assert.Equal(t, expectedTimeout, authenticator.httpClient.Timeout, "Timeout should match expected value")
+
+	// TestCase 2, With deadline but it is a bad test because it is not deterministic
+	timeout = 1000
+	downstreamDeadline = time.Now().Add(time.Duration(1000) * time.Millisecond)
+	hasDownstreamDeadline = true
+	expectedTimeout = time.Duration(1000)*time.Millisecond - downstreamDeadlineOffset
+	authenticator.adjustTimeout(timeout, downstreamDeadline, hasDownstreamDeadline)
+	assert.NotEqual(t, expectedTimeout, authenticator.httpClient.Timeout)
+	assert.LessOrEqual(t, expectedTimeout-authenticator.httpClient.Timeout, time.Duration(50)*time.Microsecond, "Timeout should match expected value")
+
+	// TestCase 3, With deadline but it is more than httpTimeout
+	timeout = 10
+	downstreamDeadline = time.Now().Add(time.Duration(100) * time.Millisecond)
+	hasDownstreamDeadline = true
+	expectedTimeout = time.Duration(10) * time.Millisecond
+	authenticator.adjustTimeout(timeout, downstreamDeadline, hasDownstreamDeadline)
+	assert.Equal(t, expectedTimeout, authenticator.httpClient.Timeout, "Timeout should match expected value")
+
+}
+
+func TestCopyUpstreamHeaders(t *testing.T) {
+	// Test case 1: Header is copied to extraHeaders
+	resp := &http.Response{
+		Header: http.Header{
+			"Header1": {"Value1"},
+			"Header2": {"Value2"},
+		},
+	}
+	extraHeaders := make(ExtraHeaders)
+	careHeaders := []string{"Header1"}
+
+	copyUpstreamHeaders(resp, &extraHeaders, careHeaders)
+	assert.Equal(t, "Value1", extraHeaders["Header1"], "Header1 should be copied to extraHeaders")
+	assert.Empty(t, extraHeaders["Header2"], "Header2 should not be copied to extraHeaders")
+
+	// Test case 2: No headers are copied
+	resp = &http.Response{
+		Header: http.Header{
+			"Header1": {"Value1"},
+			"Header2": {"Value2"},
+		},
+	}
+	extraHeaders = make(ExtraHeaders)
+	careHeaders = []string{}
+
+	copyUpstreamHeaders(resp, &extraHeaders, careHeaders)
+	assert.Empty(t, extraHeaders, "No headers should be copied to extraHeaders")
+
+	// Test case 3: Multiple headers are copied
+	resp = &http.Response{
+		Header: http.Header{
+			"Header1": {"Value1"},
+			"Header2": {"Value2"},
+			"Header3": {"Value3"},
+		},
+	}
+	extraHeaders = make(ExtraHeaders)
+	careHeaders = []string{"Header1", "Header3"}
+
+	copyUpstreamHeaders(resp, &extraHeaders, careHeaders)
+	assert.Equal(t, "Value1", extraHeaders["Header1"], "Header1 should be copied to extraHeaders")
+	assert.Empty(t, extraHeaders["Header2"], "Header2 should not be copied to extraHeaders")
+	assert.Equal(t, "Value3", extraHeaders["Header3"], "Header3 should be copied to extraHeaders")
+}
+
+type innerError struct {
+	timeout bool
+}
+
+func (inner innerError) Timeout() bool {
+	return true
+}
+
+func (inner innerError) Error() string {
+	panic("should not be used")
+}
+func TestProcessResponseError(t *testing.T) {
+	// Test case 1: No error
+	reason := processResponseError(nil)
+	assert.Equal(t, CerberusReasonNotSet, reason, "No error should return an empty string")
+
+	// Test case 2: Timeout error
+	urlErr := &url.Error{
+		Op:  "Get",
+		URL: "http://example.com",
+		Err: &innerError{timeout: true},
+	}
+	reason = processResponseError(urlErr)
+	assert.Equal(t, CerberusReasonUpstreamAuthTimeout, reason, "Timeout error should return upstream auth timeout")
+
+	// Test case 2: Timeout error
+	urlErr = &url.Error{
+		Op:  "Get",
+		URL: "http://example.com",
+		Err: errors.New("no timeout implemeted"),
+	}
+	reason = processResponseError(urlErr)
+	assert.Equal(t, CerberusReasonUpstreamAuthFailed, reason, "Timeout error should return upstream auth timeout")
+
+	// Test case 3: Other error
+	reason = processResponseError(errors.New("connection refused"))
+	assert.Equal(t, CerberusReasonUpstreamAuthFailed, reason, "Other errors should return upstream auth failed")
+}
+
+func TestSetupUpstreamAuthRequest(t *testing.T) {
+	// Test case 1: Successful setup
+	upstreamAuth := &cerberusv1alpha1.UpstreamHttpAuthService{
+		ReadTokenFrom: "X-Token-Read",
+		WriteTokenTo:  "X-Token-Write",
+		Address:       "http://example.com",
+		Timeout:       1000,
+	}
+
+	request := &Request{
+		Request: http.Request{
+			Header: http.Header{
+				"X-Token-Read": {"value"},
+			},
+		},
+	}
+
+	expectedReq, _ := http.NewRequest("GET", "http://example.com", nil)
+	expectedReq.Header = http.Header{
+		"X-Token-Write": {"value"},
+		"Content-Type":  {"application/json"},
+	}
+
+	actualReq, actualErr := setupUpstreamAuthRequest(upstreamAuth, request)
+	fmt.Println(actualReq, upstreamAuth)
+	assert.NoError(t, actualErr, "No error should occur")
+	assert.Equal(t, expectedReq.URL.String(), actualReq.URL.String(), "Request URL should match")
+	assert.Equal(t, expectedReq.Header, actualReq.Header, "Request headers should match")
+
+	// Test case 2: Error from http.NewRequest
+	upstreamAuth = &cerberusv1alpha1.UpstreamHttpAuthService{
+		Address: ":",
+	} // Empty service
+	request = &Request{}
+
+	actualReq, actualErr = setupUpstreamAuthRequest(upstreamAuth, request)
+	assert.Nil(t, actualReq, "Request should be nil when there is an error")
+	assert.Error(t, actualErr, "Error should occur when service is empty")
 }

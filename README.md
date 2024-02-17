@@ -9,12 +9,7 @@
     <img alt="GitHub go.mod Go version (subdirectory of monorepo)" src="https://img.shields.io/github/go-mod/go-version/snapp-incubator/Cerberus?style=for-the-badge&logo=go">
 </p>
 
-
-Cerberos is a powerful authorization server designed to seamlessly integrate with Contour by implementing the auth_ext interface of Envoy. In the world of modern application deployment and microservices architecture, ensuring secure and controlled access to services is paramount. Cerberos fills this role by providing a dynamic and flexible access control solution tailored to the unique demands of Contour-based applications.
-
-## Description
-
-// TODO(user): An in-depth paragraph about your project and overview of use
+In the dynamic landscape of modern application deployment and microservices architecture, the need for secure and controlled access to services is paramount. Cerberus is a powerful authorization server, seamlessly integrates with [Contour](https://projectcontour.io/)., leveraging the [External Authorization interface](https://projectcontour.io/guides/external-authorization/) of [Envoy](https://www.envoyproxy.io/), to provide a dynamic and flexible access control solution. It implements [auth_ext](https://www.envoyproxy.io/docs/envoy/v1.28.0/api-v3/service/auth/v3/external_auth.proto.html) gRPC interface which is envoy's standard and it is even a defacto of microservices.
 
 ## Getting Started
 
@@ -63,10 +58,17 @@ make undeploy
 
 ### How it works
 
-This project aims to follow the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/).
+- **Contour** is a modern Kubernetes ingress controller that facilitates the routing of external traffic to internal services. It plays a crucial role in managing ingress traffic and ensuring efficient communication within a microservices environment. It employs Envoy as its backend.
+Contour provides a wide range of features, including external authorization. This feature enables the delegation of authorization decisions to an external service, proving to be more flexible and scalable compared to relying solely on Contour's built-in authorization methods. An external authorization server, in this context, is a server implementing the Envoy external authorization gRPC protocol. Notably, Contour seamlessly supports any server that adopts this protocol, fostering adaptability and choice in implementing robust authorization solutions.
+- **Envoy** is a high-performance proxy designed for microservices architectures. It functions as the data plane for Contour, handling communication between services and providing features like load balancing, service discovery, and security.
 
-It uses [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/),
-which provide a reconcile function responsible for synchronizing resources until the desired state is reached on the cluster.
+Cerberus acts as a robust authorization server, complementing the capabilities of Contour and Envoy. By implementing the auth gRPC interface of Envoy, Cerberus seamlessly integrates with the microservices ecosystem, ensuring secure and controlled access to services. It's a part of External Authorization ability described in Contour Project.
+
+![The San Juan Mountains are beautiful!](./docs/asssets/imgs/sequence.png)
+
+This project aims to follow the Kubernetes [Operator Pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/). It uses [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/), which provide a reconcile function responsible for synchronizing resources until the desired state is reached on the cluster.
+
+
 
 ### Test It Out
 

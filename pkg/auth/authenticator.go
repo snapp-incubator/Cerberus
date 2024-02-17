@@ -182,6 +182,8 @@ func readRequestContext(request *Request) (wsvc string, ns string, reason Cerber
 	return
 }
 
+// defineValidators creates a list of validations implemented.
+// the validations will run along the order of the list.
 func defineValidators() []AuthenticationValidation {
 	return []AuthenticationValidation{
 		&AuthenticatorPriorityValidation{},
@@ -202,6 +204,9 @@ func NewAuthenticator(logger logr.Logger) *Authenticator {
 	return &a
 }
 
+// validateUpstreamAuthRequest validates the service before calling the upstream.
+// when calling the upstream authentication, one of read or write tokens must be
+// empty and the upstream address must be a valid url.
 func validateUpstreamAuthRequest(service WebservicesCacheEntry) CerberusReason {
 	if service.Spec.UpstreamHttpAuth.ReadTokenFrom == "" ||
 		service.Spec.UpstreamHttpAuth.WriteTokenTo == "" {
@@ -213,6 +218,7 @@ func validateUpstreamAuthRequest(service WebservicesCacheEntry) CerberusReason {
 	return ""
 }
 
+// setupUpstreamAuthRequest create request object to call upstream authentication
 func setupUpstreamAuthRequest(upstreamHttpAuth *v1alpha1.UpstreamHttpAuthService, request *Request) (*http.Request, error) {
 	token := request.Request.Header.Get(upstreamHttpAuth.ReadTokenFrom)
 	req, err := http.NewRequest("GET", upstreamHttpAuth.Address, nil)
@@ -226,6 +232,7 @@ func setupUpstreamAuthRequest(upstreamHttpAuth *v1alpha1.UpstreamHttpAuthService
 	return req, nil
 }
 
+// adjustTimeout sets timeout value for httpClient.timeout
 func (a *Authenticator) adjustTimeout(timeout int, downstreamDeadline time.Time, hasDownstreamDeadline bool) {
 	a.httpClient.Timeout = time.Duration(timeout) * time.Millisecond
 	if hasDownstreamDeadline {
@@ -235,6 +242,8 @@ func (a *Authenticator) adjustTimeout(timeout int, downstreamDeadline time.Time,
 	}
 }
 
+// copyUpstreamHeaders copy a listing caring headers from upstream response to
+// response headers
 func copyUpstreamHeaders(resp *http.Response, extraHeaders *ExtraHeaders, careHeaders []string) {
 	// Add requested careHeaders to extraHeaders for response
 	for header, values := range resp.Header {
@@ -247,6 +256,8 @@ func copyUpstreamHeaders(resp *http.Response, extraHeaders *ExtraHeaders, careHe
 	}
 }
 
+// processResponseError handles upstream response headers and translates them to
+// meaningful CerberusReason values
 func processResponseError(err error) CerberusReason {
 	if err == nil {
 		return CerberusReasonNotSet
@@ -299,6 +310,9 @@ func hasUpstreamAuth(service WebservicesCacheEntry) bool {
 	return service.Spec.UpstreamHttpAuth.Address != ""
 }
 
+// generateResponse initializes defaults for cerberus http result and creates a
+// valid response from cerberus reasons and computed headers to inform the client
+// that it has the access or not.
 func generateResponse(ok bool, reason CerberusReason, extraHeaders ExtraHeaders) *Response {
 	var httpStatusCode int
 	if ok {
@@ -325,12 +339,16 @@ func generateResponse(ok bool, reason CerberusReason, extraHeaders ExtraHeaders)
 	}
 }
 
+// merge merges 2 CerberusExtraHeaders and replaces if a key was present before
+// with the new value in argument map
 func (ch CerberusExtraHeaders) merge(h CerberusExtraHeaders) {
 	for key, value := range h {
 		ch[key] = value
 	}
 }
 
+// set sets the values in CerberusExtraHeaders
+// (creates if it's absent and update if it's present)
 func (ch CerberusExtraHeaders) set(key CerberusHeaderName, value string) {
 	ch[key] = value
 }

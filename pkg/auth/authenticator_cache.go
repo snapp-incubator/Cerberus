@@ -344,8 +344,8 @@ func (c *WebservicesCache) ReadWebservice(wsvc string) (WebservicesCacheEntry, b
 	return r, ok
 }
 
-// ReadAccesstoken
-func (c *AccessTokensCache) ReadAccesstoken(rawToken string) (AccessTokensCacheEntry, bool) {
+// ReadAccessToken
+func (c *AccessTokensCache) ReadAccessToken(rawToken string) (AccessTokensCacheEntry, bool) {
 	r, ok := (*c)[rawToken]
 	return r, ok
 }

@@ -235,13 +235,10 @@ func setupAuthenticationServer(listenAddress, tlsCertPath, tlsKeyPath, tlsCaPath
 
 	srv := grpc.NewServer(grpcOpts...)
 
-	authenticator, err := auth.NewAuthenticator(
+	authenticator := auth.NewAuthenticator(
 		setupLog.WithName("cerberus.authenticator"),
 	)
-	if err != nil {
-		setupLog.Error(err, "unable to create and update authenticator")
-		return nil, nil, nil, err
-	}
+
 	auth.RegisterServer(srv, authenticator)
 	return listener, srv, authenticator, nil
 }

@@ -87,16 +87,13 @@ func TestDecodeLocalName(t *testing.T) {
 
 func TestBuildNewWebservicesCache(t *testing.T) {
 	// Create instances of mocked logger, AccessTokensCache, and WebservicesCache
-	sink := testutils.TestLogSink{}
+	sink := testutils.NewTestLogSink()
 	// Create an instance of the Authenticator with mocked dependencies
 	auth := &Authenticator{
-		logger: logr.New(&sink),
-		// accessTokensCache: mockAccessTokensCache,
-		// webservicesCache:  mockWebservicesCache,
+		logger: logr.New(sink),
 	}
 
 	// Create and prepare mock data for Kubernetes resources.
-	// accessTokens := prepareAccessTokens(2)
 	webservices := &v1alpha1.WebServiceList{
 		Items: prepareWebservices(2),
 	}
@@ -112,16 +109,35 @@ func TestBuildNewWebservicesCache(t *testing.T) {
 
 	newWebservicesCache := auth.buildNewWebservicesCache(webservices, bindings)
 
-	assert.Equal(t, "info", sink.Logs[0].Type)
-	assert.Equal(t, "webservice namespace is empty", sink.Logs[0].Message)
-	assert.Equal(t, noNamespaceService.Name, sink.Logs[0].KeyValues["webservice"])
+	assert.Equal(t, "info", sink.GetLog(0).Type)
+	assert.Equal(t, "webservice namespace is empty", sink.GetLog(0).Message)
+	assert.Equal(t, noNamespaceService.Name, sink.GetLog(0).KeyValues["webservice"])
 
-	bindingLogs := sink.Logs[1:]
-	for i, binding := range bindings.Items {
-		log := bindingLogs[i]
+	// logs about ignored webservices
+	bindingLogs := (*sink.Logs)[1 : len(*sink.Logs)-1]
+
+	getBindingfromLogs := func(logs testutils.Logs) []string {
+		bindings := make([]string, 0)
+		for _, v := range logs {
+			bindings = append(bindings, v.KeyValues["binding"].(string))
+		}
+		return bindings
+	}
+
+	getBindingfromFixtures := func(accessBindings []v1alpha1.WebserviceAccessBinding) []string {
+		bindings := make([]string, 0)
+		for _, v := range accessBindings {
+			bindings = append(bindings, localName(&v.ObjectMeta))
+		}
+		return bindings
+	}
+	bindingsNamesFromLog := getBindingfromLogs(bindingLogs)
+	bindingsNamesFromFixtures := getBindingfromFixtures(bindings.Items)
+
+	assert.ElementsMatch(t, bindingsNamesFromFixtures, bindingsNamesFromLog)
+	for _, log := range bindingLogs {
 		assert.Equal(t, "info", log.Type)
 		assert.Equal(t, "ignored some webservices over binding", log.Message)
-		assert.Equal(t, binding.Namespace+"/"+binding.Name, log.KeyValues["binding"])
 	}
 
 	assert.Len(t, *newWebservicesCache, 2)
@@ -473,6 +489,60 @@ func TestAccessTokensCacheEntry_buildAllowedWebservicesCache(t *testing.T) {
 	assert.Len(t, ignoredEntries, 1, "There should be one ignored entry")
 	assert.Equal(t, "namespace2", ignoredEntries[0].Namespace,
 		"The ignored entry should have namespace 'namespace2'")
-	fmt.Println(accessToken.allowedWebservicesCache)
+}
+
+func TestAuthenticator_buildNewAccessTokensCache(t *testing.T) {
+	sink := testutils.NewTestLogSink()
+	auth := Authenticator{
+		logger: logr.New(sink),
+	}
+	secrets := &corev1.SecretList{}
+	tokens := &v1alpha1.AccessTokenList{
+		Items: []v1alpha1.AccessToken{
+			{},
+		},
+	}
+	newWebservicesCache := &WebservicesCache{}
+	tokens.Items[0].Name = "."
+	auth.buildNewAccessTokensCache(tokens, secrets, newWebservicesCache)
+	assert.Equal(t, sink.GetLog(0).Message, "dot character is not allowed in AccessToken name")
+
+	tokens.Items[0].Name = "valid"
+	tokens.Items[0].Namespace = "."
+	newWebservicesCache = &WebservicesCache{}
+	auth.buildNewAccessTokensCache(tokens, secrets, newWebservicesCache)
+
+	assert.Equal(t, sink.GetLog(2).Message, "dot character is not allowed in AccessToken namespace")
+
+	tokens.Items[0].Name = "valid"
+	tokens.Items[0].Namespace = "valid"
+	newWebservicesCache = &WebservicesCache{}
+	auth.buildNewAccessTokensCache(tokens, secrets, newWebservicesCache)
+	assert.Equal(t, sink.GetLog(4).Message, "unable to find secret for accesstoken")
+
+	secrets.Items = []corev1.Secret{
+		{
+			ObjectMeta: v1.ObjectMeta{
+				Name: "valid.valid",
+			},
+		},
+	}
+	newWebservicesCache = &WebservicesCache{}
+	auth.buildNewAccessTokensCache(tokens, secrets, newWebservicesCache)
+	assert.Equal(t, sink.GetLog(6).Message, "corresponding secret for accesstoken does not contain token field")
+
+	secrets.Items = []corev1.Secret{
+		{
+			ObjectMeta: v1.ObjectMeta{
+				Name: "valid.valid",
+			},
+			Data: map[string][]byte{
+				"token": []byte("test-token"),
+			},
+		},
+	}
+	newWebservicesCache = &WebservicesCache{}
+	tokenCache := auth.buildNewAccessTokensCache(tokens, secrets, newWebservicesCache)
+	assert.Equal(t, tokens.Items[0], (*tokenCache)["test-token"].AccessToken)
 
 }

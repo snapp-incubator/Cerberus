@@ -3,10 +3,12 @@ package auth
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"path/filepath"
 	"strings"
 )
 
+// AuthenticationValidation Validation for IP restrictions
 type AuthenticationValidation interface {
 	Validate(ac *AccessTokensCacheEntry, wc *WebservicesCacheEntry, request *Request) (CerberusReason, CerberusExtraHeaders)
 }
@@ -30,18 +32,19 @@ func (apt *AuthenticatorPriorityValidation) Validate(ac *AccessTokensCacheEntry,
 
 type AuthenticationIPValidation struct{}
 
-func getIPListFromRequest(request *Request) (CerberusReason, []string) {
+// getIPListFromRequest extract IP addresses from request and it's headers
+func getIPListFromRequest(request *http.Request) (CerberusReason, []string) {
 	ipList := make([]string, 0)
 
 	// Retrieve "x-forwarded-for" and "referrer" headers from the request
-	xForwardedFor := request.Request.Header.Get("x-forwarded-for")
+	xForwardedFor := request.Header.Get("x-forwarded-for")
 	if xForwardedFor != "" {
 		ips := strings.Split(xForwardedFor, ", ")
 		ipList = append(ipList, ips...)
 	}
 
 	// Retrieve "remoteAddr" from the request
-	remoteAddr := request.Request.RemoteAddr
+	remoteAddr := request.RemoteAddr
 	host, _, err := net.SplitHostPort(remoteAddr)
 	if err != nil {
 		return CerberusReasonInvalidSourceIp, nil
@@ -55,12 +58,13 @@ func getIPListFromRequest(request *Request) (CerberusReason, []string) {
 	return CerberusReasonNotSet, ipList
 }
 
+// Validate validates IP access restrictions
 func (ait *AuthenticationIPValidation) Validate(
 	ac *AccessTokensCacheEntry, wsvc *WebservicesCacheEntry, request *Request) (CerberusReason, CerberusExtraHeaders) {
 	newExtraHeaders := make(CerberusExtraHeaders)
 	if len(ac.Spec.AllowedIPs) > 0 {
 
-		reason, ipList := getIPListFromRequest(request)
+		reason, ipList := getIPListFromRequest(&request.Request)
 		if reason != CerberusReasonNotSet {
 			return reason, newExtraHeaders
 		}
@@ -100,8 +104,10 @@ func checkIP(ips []string, ipAllowList []string) (bool, error) {
 	return false, nil
 }
 
+// AuthenticationDomainValidation validates for domain definitions
 type AuthenticationDomainValidation struct{}
 
+// Validate checks domain restrictions
 func (adv *AuthenticationDomainValidation) Validate(ac *AccessTokensCacheEntry,
 	wsvc *WebservicesCacheEntry, request *Request) (CerberusReason, CerberusExtraHeaders) {
 
@@ -109,7 +115,6 @@ func (adv *AuthenticationDomainValidation) Validate(ac *AccessTokensCacheEntry,
 	referrer := request.Request.Header.Get("referrer")
 
 	// Check if IgnoreDomain is true, skip domain list check
-	fmt.Println(wsvc.Spec.IgnoreDomain, len(ac.Spec.AllowedDomains), request.Request.Header, referrer)
 	if !wsvc.Spec.IgnoreDomain && len(ac.Spec.AllowedDomains) > 0 && referrer != "" {
 		domainAllowed, err := CheckDomain(referrer, ac.Spec.AllowedDomains)
 		if err != nil {
@@ -141,8 +146,10 @@ func CheckDomain(domain string, domainAllowedList []string) (bool, error) {
 	return false, nil
 }
 
+// AuthenticationTokenAccessValidation check for token and webservice access
 type AuthenticationTokenAccessValidation struct{}
 
+// Validate checks token and webservice access
 func (adv *AuthenticationTokenAccessValidation) Validate(ac *AccessTokensCacheEntry,
 	wsvc *WebservicesCacheEntry, request *Request) (CerberusReason, CerberusExtraHeaders) {
 	if !ac.TestAccess(wsvc.Name) {

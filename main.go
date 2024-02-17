@@ -45,6 +45,7 @@ import (
 	cerberusv1alpha1 "github.com/snapp-incubator/Cerberus/api/v1alpha1"
 	"github.com/snapp-incubator/Cerberus/controllers"
 	"github.com/snapp-incubator/Cerberus/pkg/auth"
+	"github.com/snapp-incubator/Cerberus/pkg/tracing"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -61,14 +62,6 @@ func init() {
 }
 
 func main() {
-	var metricsAddr string
-	var enableLeaderElection bool
-	var probeAddr string
-	var authAddr string
-
-	var tlsCertPath string
-	var tlsKeyPath string
-	var tlsCaPath string
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -78,34 +71,51 @@ func main() {
 	flag.StringVar(&tlsKeyPath, "tls-key-path", "", "grpc Authentication server TLS key")
 	flag.StringVar(&tlsCaPath, "tls-ca-path", "", "grpc Authentication server CA certificate")
 
+	flag.BoolVar(&enableTracing, "enable-tracing", false,
+		"Enable OpenTelemetry Tracing. "+
+			"After enabling this you should add --tracing-provider")
+	flag.StringVar(&tracingProvider, "tracing-provider", "jaeger",
+		"Tracing provider, for now only 'jaeger'. "+
+			"You should also set OTEL_EXPORTER_JAEGER_AGENT_HOST and OTEL_EXPORTER_JAEGER_AGENT_PORT.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+
 	opts := zap.Options{
 		Development: true,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
+
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	var err error
+	if enableTracing {
+		if tracingProvider == "jaeger" {
+			err = tracing.SetTracingProvider(tracing.JaegerTracing)
+		} else {
+			reportFatalErrorAndExit(fmt.Errorf("invalid-tracing-provider"), "unable to setup environment")
+		}
+	}
+	if err != nil {
+		reportFatalErrorAndExit(err, "setup tracing provider encountered error")
+	}
 
 	listener, srv, authenticator, err := setupAuthenticationServer(authAddr, tlsCertPath, tlsKeyPath, tlsCaPath)
 	if err != nil {
-		setupLog.Error(err, "unable to set up authentication server")
-		os.Exit(1)
+		reportFatalErrorAndExit(err, "unable to setup authentication server")
 	}
 
 	mgr, err := setupManager(metricsAddr, probeAddr, enableLeaderElection, authenticator)
 	if err != nil {
-		setupLog.Error(err, "unable to set up manager")
-		os.Exit(1)
+		reportFatalErrorAndExit(err, "unable to setup manager")
 	}
 
 	//+kubebuilder:scaffold:builder
 
 	err = setupHealthChecks(mgr)
 	if err != nil {
-		setupLog.Error(err, "unable to set up health/ready check")
-		os.Exit(1)
+		reportFatalErrorAndExit(err, "unable to set up health/ready check")
 	}
 
 	errChan := make(chan error)
@@ -116,8 +126,7 @@ func main() {
 
 	select {
 	case err := <-errChan:
-		setupLog.Error(err, "cerberus error")
-		os.Exit(1)
+		reportFatalErrorAndExit(err, "cerberus error")
 	case <-ctx.Done():
 		os.Exit(0)
 	}
@@ -264,4 +273,9 @@ func runManager(ctx context.Context, mgr ctrl.Manager, errChan chan error) {
 	}
 
 	errChan <- nil
+}
+
+func reportFatalErrorAndExit(err error, msg string) {
+	setupLog.Error(err, msg)
+	os.Exit(1)
 }

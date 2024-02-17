@@ -44,7 +44,9 @@ import (
 
 	cerberusv1alpha1 "github.com/snapp-incubator/Cerberus/api/v1alpha1"
 	"github.com/snapp-incubator/Cerberus/controllers"
+	"github.com/snapp-incubator/Cerberus/internal/settings"
 	"github.com/snapp-incubator/Cerberus/pkg/auth"
+	"github.com/snapp-incubator/Cerberus/pkg/tracing"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -61,40 +63,44 @@ func init() {
 }
 
 func main() {
-	var metricsAddr string
-	var enableLeaderElection bool
-	var probeAddr string
-	var authAddr string
+	// load settings from env and bind flags for overwrites
+	st, err := settings.GetSettings()
+	if err != nil {
+		reportFatalErrorAndExit(err, "failed-to-load-settings")
+		return
+	}
+	st.BindFlags(flag.CommandLine)
 
-	var tlsCertPath string
-	var tlsKeyPath string
-	var tlsCaPath string
-
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.StringVar(&authAddr, "address", ":8082", "The address the authorization service binds to.")
-
-	flag.StringVar(&tlsCertPath, "tls-cert-path", "", "grpc Authentication server TLS certificate")
-	flag.StringVar(&tlsKeyPath, "tls-key-path", "", "grpc Authentication server TLS key")
-	flag.StringVar(&tlsCaPath, "tls-ca-path", "", "grpc Authentication server CA certificate")
-
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
-		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
+	// bind zap flags
 	opts := zap.Options{
 		Development: true,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
+
+	// add zapper to controller
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	listener, srv, authenticator, err := setupAuthenticationServer(authAddr, tlsCertPath, tlsKeyPath, tlsCaPath)
+	if st.Tracing.Enabled {
+		if st.Tracing.Provider == "jaeger" {
+			err = tracing.SetTracingProvider(tracing.JaegerTracing, st.Tracing.SamplingRatio)
+		} else {
+			reportFatalErrorAndExit(fmt.Errorf("invalid-tracing-provider"), "unable to setup environment")
+			return
+		}
+	}
 	if err != nil {
-		setupLog.Error(err, "unable to set up authentication server")
-		os.Exit(1)
+		reportFatalErrorAndExit(err, "setup tracing provider encountered error")
+		return
 	}
 
-	mgr, err := setupManager(metricsAddr, probeAddr, enableLeaderElection, authenticator)
+	listener, srv, authenticator, err := setupAuthenticationServer(st)
+	if err != nil {
+		reportFatalErrorAndExit(err, "unable to setup authentication server")
+		return
+	}
+
+	mgr, err := setupManager(st, authenticator)
 	if err != nil {
 		setupLog.Error(err, "unable to set up manager")
 		os.Exit(1)
@@ -124,9 +130,7 @@ func main() {
 }
 
 func setupManager(
-	metricsAddr string,
-	probeAddr string,
-	enableLeaderElection bool,
+	st settings.Settings,
 	cache controllers.ProcessCache,
 ) (ctrl.Manager, error) {
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
@@ -135,11 +139,12 @@ func setupManager(
 			Port: 9443,
 		}),
 		Metrics: metricsserver.Options{
-			BindAddress: metricsAddr,
+			BindAddress: st.MetricsAddress,
 		},
-		HealthProbeBindAddress: probeAddr,
-		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "f5d1781e.snappcloud.io",
+		HealthProbeBindAddress: st.ProbeAddress,
+		LeaderElection:         st.LeaderElection.Enabled,
+		LeaderElectionID:       st.LeaderElection.ID,
+
 		// limit Manager to cerberus namespace
 		NewCache: func(config *rest.Config, opts controllercache.Options) (controllercache.Cache, error) {
 			opts.ByObject = make(map[client.Object]controllercache.ByObject)
@@ -174,7 +179,7 @@ func setupManager(
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Cache:    cache,
-		ReadOnly: !enableLeaderElection,
+		ReadOnly: !st.LeaderElection.Enabled,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AccessToken")
 		return nil, err
@@ -183,7 +188,7 @@ func setupManager(
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Cache:    cache,
-		ReadOnly: !enableLeaderElection,
+		ReadOnly: !st.LeaderElection.Enabled,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "WebService")
 		return nil, err
@@ -192,7 +197,7 @@ func setupManager(
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Cache:    cache,
-		ReadOnly: !enableLeaderElection,
+		ReadOnly: !st.LeaderElection.Enabled,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "WebserviceAccessBinding")
 		return nil, err
@@ -213,8 +218,8 @@ func setupHealthChecks(mgr ctrl.Manager) error {
 	return nil
 }
 
-func setupAuthenticationServer(listenAddress, tlsCertPath, tlsKeyPath, tlsCaPath string) (net.Listener, *grpc.Server, *auth.Authenticator, error) {
-	listener, err := net.Listen("tcp", listenAddress)
+func setupAuthenticationServer(st settings.Settings) (net.Listener, *grpc.Server, *auth.Authenticator, error) {
+	listener, err := net.Listen("tcp", st.AuthServerAddress)
 	if err != nil {
 		setupLog.Error(err, "problem in binding authorization service")
 		return nil, nil, nil, err
@@ -224,8 +229,8 @@ func setupAuthenticationServer(listenAddress, tlsCertPath, tlsKeyPath, tlsCaPath
 		grpc.MaxConcurrentStreams(1 << 20),
 	}
 
-	if tlsCertPath != "" && tlsKeyPath != "" {
-		creds, err := auth.NewServerCredentials(tlsCertPath, tlsKeyPath, tlsCaPath)
+	if st.TLS.CertPath != "" && st.TLS.KeyPath != "" {
+		creds, err := auth.NewServerCredentials(st.TLS.CertPath, st.TLS.KeyPath, st.TLS.CaPath)
 		if err != nil {
 			return nil, nil, nil, err
 		}

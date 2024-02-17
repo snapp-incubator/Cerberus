@@ -25,12 +25,10 @@ var (
 	testDomain      = "example.com"                 // Use a valid domain for testing
 	subjects        = generateSubjects(2)           // Generates ["subject-1", "subject-2"]
 	webservices     = generateWebservices(2)        // Generates ["webservice-1", "webservice-2"]
-	// tokenSecretRef  = generateTokenSecretRef()
-
 )
 
+// generateIPAllowList Generate a large IP allow list with unique subnets
 func generateIPAllowList(size int) []string {
-	// Generate a large IP allow list with unique subnets
 	ipList := make([]string, size)
 	for i := 0; i < size; i++ {
 		ipList[i] = fmt.Sprintf("192.168.0.%d", i)
@@ -38,8 +36,8 @@ func generateIPAllowList(size int) []string {
 	return ipList
 }
 
+// generateDomainAllowList Generate a large domain allow list with unique patterns
 func generateDomainAllowList(size int) []string {
-	// Generate a large domain allow list with unique patterns
 	domainList := make([]string, size)
 	for i := 0; i < size; i++ {
 		domainList[i] = fmt.Sprintf("example%d.com", i)
@@ -48,11 +46,7 @@ func generateDomainAllowList(size int) []string {
 	return domainList
 }
 
-// func generateTokenSecretRef() *corev1.LocalObjectReference {
-// 	example := &corev1.LocalObjectReference{Name: "example-token-secret-ref"}
-// 	return example
-// }
-
+// generateSubjects create a list of subjects in form of string array
 func generateSubjects(subjectCount int) []string {
 	subject := make([]string, subjectCount)
 
@@ -63,6 +57,7 @@ func generateSubjects(subjectCount int) []string {
 	return subject
 }
 
+// generateWebservices create a list of webservices in form of LocalWebserviceReference array
 func generateWebservices(webserviceCount int) []cerberusv1alpha1.LocalWebserviceReference {
 	webservice := make([]cerberusv1alpha1.LocalWebserviceReference, webserviceCount)
 
@@ -440,6 +435,8 @@ func TestTestAccessLimited(t *testing.T) {
 
 }
 
+// setupTestEnvironment create test environment for kubernetes client enabled
+// tests to mock the apis.
 func setupTestEnvironment(t *testing.T) (client.Client, *Authenticator) {
 	// Initialize a Kubernetes client's scheme.
 	scheme := runtime.NewScheme()
@@ -464,6 +461,7 @@ func setupTestEnvironment(t *testing.T) (client.Client, *Authenticator) {
 	return fakeClient, authenticator
 }
 
+// prepareAccessTokens create a list of test AccessTokens for tests
 func prepareAccessTokens(count int) []cerberusv1alpha1.AccessToken {
 
 	// Create and prepare access tokens with unique names.
@@ -482,6 +480,7 @@ func prepareAccessTokens(count int) []cerberusv1alpha1.AccessToken {
 	return accessTokens
 }
 
+// prepareWebserviceAccessBindings create a list of test WebserviceAccessBindings for tests
 func prepareWebserviceAccessBindings(count int) []cerberusv1alpha1.WebserviceAccessBinding {
 	// Create and prepare webservice access bindings with unique names.
 	bindings := make([]cerberusv1alpha1.WebserviceAccessBinding, count)
@@ -498,6 +497,7 @@ func prepareWebserviceAccessBindings(count int) []cerberusv1alpha1.WebserviceAcc
 	return bindings
 }
 
+// prepareWebservices creates a list of WebServices for tests
 func prepareWebservices(count int) []cerberusv1alpha1.WebService {
 	// Create and prepare webservice resources with unique names.
 	webservices := make([]cerberusv1alpha1.WebService, count)
@@ -518,6 +518,7 @@ func prepareWebservices(count int) []cerberusv1alpha1.WebService {
 	return webservices
 }
 
+// prepareWebservices creates a list of WebServices for tests
 func prepareSecrets(count int) []corev1.Secret {
 	// Create and prepare secrets with unique names.
 	secrets := make([]corev1.Secret, count)
@@ -533,6 +534,7 @@ func prepareSecrets(count int) []corev1.Secret {
 	return secrets
 }
 
+// createAccessTokens creates a list of access tokens in kubernetes fake client
 func createAccessTokens(t *testing.T, fakeClient client.Client, accessTokens ...cerberusv1alpha1.AccessToken) {
 	ctx := context.Background()
 	for _, token := range accessTokens {
@@ -540,6 +542,7 @@ func createAccessTokens(t *testing.T, fakeClient client.Client, accessTokens ...
 	}
 }
 
+// createBindings creates a list of bindings in kubernetes fake client
 func createBindings(t *testing.T, fakeClient client.Client, bindings ...cerberusv1alpha1.WebserviceAccessBinding) {
 	ctx := context.Background()
 	for _, binding := range bindings {
@@ -547,6 +550,7 @@ func createBindings(t *testing.T, fakeClient client.Client, bindings ...cerberus
 	}
 }
 
+// createWebservices creates a list of Webservices in kubernetes fake client
 func createWebservices(t *testing.T, fakeClient client.Client, webservices ...cerberusv1alpha1.WebService) {
 	ctx := context.Background()
 	for _, service := range webservices {
@@ -554,6 +558,7 @@ func createWebservices(t *testing.T, fakeClient client.Client, webservices ...ce
 	}
 }
 
+// createSecrets creates a list of secrets in kubernetes fake client
 func createSecrets(t *testing.T, fakeClient client.Client, secrets ...corev1.Secret) {
 	ctx := context.Background()
 	for _, secret := range secrets {
@@ -561,6 +566,8 @@ func createSecrets(t *testing.T, fakeClient client.Client, secrets ...corev1.Sec
 	}
 }
 
+// assertCachesPopulated asserts that webservicesCache is populated.
+// authenticator.accessTokensCache is not supported yet
 func assertCachesPopulated(t *testing.T, authenticator *Authenticator) {
 	authenticator.cacheLock.RLock()
 	defer authenticator.cacheLock.RUnlock()
@@ -888,6 +895,8 @@ func TestCopyUpstreamHeaders(t *testing.T) {
 	assert.Equal(t, "Value3", extraHeaders["Header3"], "Header3 should be copied to extraHeaders")
 }
 
+// Mock error interface with timeout interface implementation for
+// testing timeout errors in tests
 type innerError struct {
 	timeout bool
 }
@@ -951,7 +960,6 @@ func TestSetupUpstreamAuthRequest(t *testing.T) {
 	}
 
 	actualReq, actualErr := setupUpstreamAuthRequest(upstreamAuth, request)
-	fmt.Println(actualReq, upstreamAuth)
 	assert.NoError(t, actualErr, "No error should occur")
 	assert.Equal(t, expectedReq.URL.String(), actualReq.URL.String(), "Request URL should match")
 	assert.Equal(t, expectedReq.Header, actualReq.Header, "Request headers should match")

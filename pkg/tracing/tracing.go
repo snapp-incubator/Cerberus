@@ -14,6 +14,7 @@ import (
 
 const (
 	CerberusTracerName = "cerberus"
+	ServiceName        = "cerberus"
 	JaegerTracing      = "jaeger"
 )
 
@@ -23,22 +24,21 @@ func init() {
 	cerberusTracer = otel.Tracer(CerberusTracerName)
 }
 
-func SetTracingProvider(provider string) error {
+func SetTracingProvider(provider string, samplingRation float64) error {
 	if provider == JaegerTracing {
 		exporter, err := jaeger.New(jaeger.WithAgentEndpoint())
 		if err != nil {
-			return nil, err
+			return err
 		}
-		tp := tracesdk.NewTracerProvider(
+		cerberusTracer = tracesdk.NewTracerProvider(
 			tracesdk.WithBatcher(exporter),
-			tracesdk.WithSampler(tracesdk.ParentBased(tracesdk.TraceIDRatioBased(samplerRatio))),
-			// Record information about this application in a Resource.
+			tracesdk.WithSampler(tracesdk.ParentBased(tracesdk.TraceIDRatioBased(samplingRation))),
 			tracesdk.WithResource(resource.NewWithAttributes(
 				semconv.SchemaURL,
-				semconv.ServiceNameKey.String(serviceName),
+				semconv.ServiceNameKey.String(ServiceName),
 			)),
-		)
-		return tp, nil
+		).Tracer(CerberusTracerName)
+		return nil
 
 	}
 	return fmt.Errorf("invalid-tracing-provider")

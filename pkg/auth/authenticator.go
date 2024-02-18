@@ -2,12 +2,8 @@ package auth
 
 import (
 	"context"
-	"fmt"
-	"net"
 	"net/http"
 	"net/url"
-	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -33,6 +29,8 @@ type Authenticator struct {
 
 	cacheLock  sync.RWMutex
 	updateLock sync.Mutex
+
+	validators []AuthenticationValidation
 }
 
 // ExtraHeaders are headers which will be added to the response
@@ -84,7 +82,7 @@ func (a *Authenticator) TestAccess(request *Request, wsvc WebservicesCacheEntry)
 		return
 	}
 
-	ac, ok := a.accessTokensCache.ReadAccesstoken(token)
+	ac, ok := a.accessTokensCache.ReadAccessToken(token)
 	if !ok {
 		reason = CerberusReasonTokenNotFound
 		return
@@ -92,93 +90,16 @@ func (a *Authenticator) TestAccess(request *Request, wsvc WebservicesCacheEntry)
 
 	newExtraHeaders.set(CerberusHeaderAccessToken, ac.ObjectMeta.Name)
 
-	reason, h := a.testPriority(ac, wsvc)
-	newExtraHeaders.merge(h)
-	if reason != "" {
-		return
-	}
-
-	reason, h = a.testIPAccess(ac, wsvc, request)
-	newExtraHeaders.merge(h)
-	if reason != "" {
-		return
-	}
-
-	reason, h = a.testDomainAccess(ac, wsvc, request)
-	newExtraHeaders.merge(h)
-
-	if !ac.TestAccess(wsvc.Name) {
-		return
+	for _, validator := range a.validators {
+		var headers CerberusExtraHeaders
+		reason, headers = validator.Validate(&ac, &wsvc, request)
+		newExtraHeaders.merge(headers)
+		if reason != "" {
+			return
+		}
 	}
 	reason = CerberusReasonOK
 	return
-}
-
-func (a *Authenticator) testPriority(ac AccessTokensCacheEntry, wsvc WebservicesCacheEntry) (CerberusReason, CerberusExtraHeaders) {
-	newExtraHeaders := make(CerberusExtraHeaders)
-	priority := ac.Spec.Priority
-	minPriority := wsvc.Spec.MinimumTokenPriority
-	if priority < minPriority {
-		newExtraHeaders[CerberusHeaderAccessLimitReason] = TokenPriorityLowerThanServiceMinAccessLimit
-		newExtraHeaders[CerberusHeaderTokenPriority] = fmt.Sprint(priority)
-		newExtraHeaders[CerberusHeaderWebServiceMinPriority] = fmt.Sprint(minPriority)
-		return CerberusReasonAccessLimited, newExtraHeaders
-	}
-	return "", newExtraHeaders
-}
-
-func (a *Authenticator) testIPAccess(ac AccessTokensCacheEntry, wsvc WebservicesCacheEntry, request *Request) (CerberusReason, CerberusExtraHeaders) {
-	newExtraHeaders := make(CerberusExtraHeaders)
-	if len(ac.Spec.AllowedIPs) > 0 {
-		ipList := make([]string, 0)
-
-		// Retrieve "x-forwarded-for" and "referrer" headers from the request
-		xForwardedFor := request.Request.Header.Get("x-forwarded-for")
-		if xForwardedFor != "" {
-			ips := strings.Split(xForwardedFor, ", ")
-			ipList = append(ipList, ips...)
-		}
-
-		// Retrieve "remoteAddr" from the request
-		remoteAddr := request.Request.RemoteAddr
-		host, _, err := net.SplitHostPort(remoteAddr)
-		if err != nil {
-			return CerberusReasonInvalidSourceIp, newExtraHeaders
-		}
-		if net.ParseIP(host) == nil {
-			return CerberusReasonEmptySourceIp, newExtraHeaders
-		}
-		ipList = append(ipList, host)
-
-		// Check if IgnoreIP is true, skip IP list check
-		if !wsvc.Spec.IgnoreIP {
-			ipAllowed, err := checkIP(ipList, ac.Spec.AllowedIPs)
-			if err != nil {
-				return CerberusReasonBadIpList, newExtraHeaders
-			}
-			if !ipAllowed {
-				return CerberusReasonIpNotAllowed, newExtraHeaders
-			}
-		}
-	}
-	return "", newExtraHeaders
-}
-
-func (a *Authenticator) testDomainAccess(ac AccessTokensCacheEntry, wsvc WebservicesCacheEntry, request *Request) (CerberusReason, CerberusExtraHeaders) {
-	newExtraHeaders := make(CerberusExtraHeaders)
-	referrer := request.Request.Header.Get("referrer")
-
-	// Check if IgnoreDomain is true, skip domain list check
-	if !wsvc.Spec.IgnoreDomain && len(ac.Spec.AllowedDomains) > 0 && referrer != "" {
-		domainAllowed, err := CheckDomain(referrer, ac.Spec.AllowedDomains)
-		if err != nil {
-			return CerberusReasonBadDomainList, newExtraHeaders
-		}
-		if !domainAllowed {
-			return CerberusReasonDomainNotAllowed, newExtraHeaders
-		}
-	}
-	return "", newExtraHeaders
 }
 
 // readToken reads token from given Request object and
@@ -261,52 +182,91 @@ func readRequestContext(request *Request) (wsvc string, ns string, reason Cerber
 	return
 }
 
+// defineValidators creates a list of validations implemented.
+// the validations will run along the order of the list.
+func defineValidators() []AuthenticationValidation {
+	return []AuthenticationValidation{
+		&AuthenticatorPriorityValidation{},
+		&AuthenticationIPValidation{},
+		&AuthenticationDomainValidation{},
+		&AuthenticationTokenAccessValidation{},
+	}
+}
+
 // NewAuthenticator creates new Authenticator object with given logger.
 // currently it's not returning any error
-func NewAuthenticator(logger logr.Logger) (*Authenticator, error) {
+func NewAuthenticator(logger logr.Logger) *Authenticator {
 	a := Authenticator{
 		logger:     logger,
 		httpClient: &http.Client{},
 	}
-	return &a, nil
+	a.validators = defineValidators()
+	return &a
 }
 
-// checkIP checks if given ip is a member of given CIDR networks or not
-// ipAllowList should be CIDR notation of the networks or net.ParseError will be retuned
-func checkIP(ips []string, ipAllowList []string) (bool, error) {
-	for _, ip := range ips {
-		clientIP := net.ParseIP(ip)
+// validateUpstreamAuthRequest validates the service before calling the upstream.
+// when calling the upstream authentication, one of read or write tokens must be
+// empty and the upstream address must be a valid url.
+func validateUpstreamAuthRequest(service WebservicesCacheEntry) CerberusReason {
+	if service.Spec.UpstreamHttpAuth.ReadTokenFrom == "" ||
+		service.Spec.UpstreamHttpAuth.WriteTokenTo == "" {
+		return CerberusReasonTargetAuthTokenEmpty
+	}
+	if !govalidator.IsRequestURL(service.Spec.UpstreamHttpAuth.Address) {
+		return CerberusReasonInvalidUpstreamAddress
+	}
+	return ""
+}
 
-		for _, AllowedRangeIP := range ipAllowList {
-			_, subnet, err := net.ParseCIDR(AllowedRangeIP)
-			if err != nil {
-				return false, err
-			}
+// setupUpstreamAuthRequest create request object to call upstream authentication
+func setupUpstreamAuthRequest(upstreamHttpAuth *v1alpha1.UpstreamHttpAuthService, request *Request) (*http.Request, error) {
+	token := request.Request.Header.Get(upstreamHttpAuth.ReadTokenFrom)
+	req, err := http.NewRequest("GET", upstreamHttpAuth.Address, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header = http.Header{
+		upstreamHttpAuth.WriteTokenTo: {token},
+		"Content-Type":                {"application/json"},
+	}
+	return req, nil
+}
 
-			if subnet.Contains(clientIP) {
-				return true, nil
+// adjustTimeout sets timeout value for httpClient.timeout
+func (a *Authenticator) adjustTimeout(timeout int, downstreamDeadline time.Time, hasDownstreamDeadline bool) {
+	a.httpClient.Timeout = time.Duration(timeout) * time.Millisecond
+	if hasDownstreamDeadline {
+		if time.Until(downstreamDeadline)-downstreamDeadlineOffset < a.httpClient.Timeout {
+			a.httpClient.Timeout = time.Until(downstreamDeadline) - downstreamDeadlineOffset
+		}
+	}
+}
+
+// copyUpstreamHeaders copy a listing caring headers from upstream response to
+// response headers
+func copyUpstreamHeaders(resp *http.Response, extraHeaders *ExtraHeaders, careHeaders []string) {
+	// Add requested careHeaders to extraHeaders for response
+	for header, values := range resp.Header {
+		for _, careHeader := range careHeaders {
+			if header == careHeader && len(values) > 0 {
+				(*extraHeaders)[header] = values[0]
+				break
 			}
 		}
 	}
-	return false, nil
 }
 
-// CheckDomain checks if given domain will match to one of the GLOB patterns in
-// domainAllowedList (the list items should be valid patterns or ErrBadPattern will be returned)
-func CheckDomain(domain string, domainAllowedList []string) (bool, error) {
-	for _, pattern := range domainAllowedList {
-		pattern = strings.ToLower(pattern)
-		domain = strings.ToLower(domain)
-
-		matched, err := filepath.Match(pattern, domain)
-		if err != nil {
-			return false, err
-		}
-		if matched {
-			return true, nil
-		}
+// processResponseError handles upstream response headers and translates them to
+// meaningful CerberusReason values
+func processResponseError(err error) CerberusReason {
+	if err == nil {
+		return CerberusReasonNotSet
 	}
-	return false, nil
+	if urlErr, ok := err.(*url.Error); ok && urlErr != nil && urlErr.Timeout() {
+		return CerberusReasonUpstreamAuthTimeout
+	}
+	return CerberusReasonUpstreamAuthFailed
+
 }
 
 // checkServiceUpstreamAuth function is designed to validate the request through
@@ -315,45 +275,22 @@ func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, 
 	downstreamDeadline, hasDownstreamDeadline := ctx.Deadline()
 	serviceUpstreamAuthCalls.With(AddWithDownstreamDeadline(nil, hasDownstreamDeadline)).Inc()
 
-	if service.Spec.UpstreamHttpAuth.ReadTokenFrom == "" {
-		return false, CerberusReasonSourceAuthTokenEmpty
+	if reason := validateUpstreamAuthRequest(service); reason != "" {
+		return false, reason
 	}
-	if service.Spec.UpstreamHttpAuth.WriteTokenTo == "" {
-		return false, CerberusReasonTargetAuthTokenEmpty
-	}
-	if !govalidator.IsRequestURL(service.Spec.UpstreamHttpAuth.Address) {
-		return false, CerberusReasonInvalidUpstreamAddress
-	}
-
-	token := request.Request.Header.Get(service.Spec.UpstreamHttpAuth.ReadTokenFrom)
-
-	// TODO: get http method from webservice crd
-	req, err := http.NewRequest("GET", service.Spec.UpstreamHttpAuth.Address, nil)
+	upstreamAuth := service.Spec.UpstreamHttpAuth
+	req, err := setupUpstreamAuthRequest(&upstreamAuth, request)
 	if err != nil {
 		return false, CerberusReasonUpstreamAuthNoReq
 	}
-
-	req.Header = http.Header{
-		service.Spec.UpstreamHttpAuth.WriteTokenTo: {token},
-		"Content-Type": {"application/json"},
-	}
-
-	a.httpClient.Timeout = time.Duration(service.Spec.UpstreamHttpAuth.Timeout) * time.Millisecond
-	if hasDownstreamDeadline {
-		if time.Until(downstreamDeadline)-downstreamDeadlineOffset < a.httpClient.Timeout {
-			a.httpClient.Timeout = time.Until(downstreamDeadline) - downstreamDeadlineOffset
-		}
-	}
+	a.adjustTimeout(upstreamAuth.Timeout, downstreamDeadline, hasDownstreamDeadline)
 
 	reqStart := time.Now()
 	resp, err := a.httpClient.Do(req)
 	reqDuration := time.Since(reqStart)
-	if err != nil {
-		urlErr, ok := err.(*url.Error)
-		if ok && urlErr != nil && urlErr.Timeout() {
-			return false, CerberusReasonUpstreamAuthTimeout
-		}
-		return false, CerberusReasonUpstreamAuthFailed
+
+	if reason := processResponseError(err); reason != "" {
+		return false, reason
 	}
 
 	labels := AddWithDownstreamDeadline(AddStatusLabel(nil, resp.StatusCode), hasDownstreamDeadline)
@@ -363,17 +300,7 @@ func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, 
 		return false, CerberusReasonUnauthorized
 	}
 	// add requested careHeaders to extraHeaders for response
-	for header, values := range resp.Header {
-		for _, careHeader := range service.Spec.UpstreamHttpAuth.CareHeaders {
-			if header == careHeader {
-				if len(values) > 0 {
-					(*extraHeaders)[header] = values[0]
-				}
-				break
-			}
-		}
-	}
-
+	copyUpstreamHeaders(resp, extraHeaders, service.Spec.UpstreamHttpAuth.CareHeaders)
 	return true, CerberusReasonOK
 }
 
@@ -383,6 +310,9 @@ func hasUpstreamAuth(service WebservicesCacheEntry) bool {
 	return service.Spec.UpstreamHttpAuth.Address != ""
 }
 
+// generateResponse initializes defaults for cerberus http result and creates a
+// valid response from cerberus reasons and computed headers to inform the client
+// that it has the access or not.
 func generateResponse(ok bool, reason CerberusReason, extraHeaders ExtraHeaders) *Response {
 	var httpStatusCode int
 	if ok {
@@ -409,12 +339,16 @@ func generateResponse(ok bool, reason CerberusReason, extraHeaders ExtraHeaders)
 	}
 }
 
+// merge merges 2 CerberusExtraHeaders and replaces if a key was present before
+// with the new value in argument map
 func (ch CerberusExtraHeaders) merge(h CerberusExtraHeaders) {
 	for key, value := range h {
 		ch[key] = value
 	}
 }
 
+// set sets the values in CerberusExtraHeaders
+// (creates if it's absent and update if it's present)
 func (ch CerberusExtraHeaders) set(key CerberusHeaderName, value string) {
 	ch[key] = value
 }

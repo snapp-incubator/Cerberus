@@ -120,8 +120,10 @@ func main() {
 
 	select {
 	case err := <-errChan:
+		finalizers()
 		reportFatalErrorAndExit(err, "cerberus error")
 	case <-ctx.Done():
+		finalizers()
 		os.Exit(0)
 	}
 }
@@ -268,4 +270,13 @@ func runManager(ctx context.Context, mgr ctrl.Manager, errChan chan error) {
 func reportFatalErrorAndExit(err error, msg string) {
 	setupLog.Error(err, msg)
 	os.Exit(1)
+}
+
+func finalizers() {
+	err := tracing.Shutdown(context.Background())
+	if err != nil {
+		setupLog.Error(err, "failed to shutdown tracing properly")
+	} else {
+		setupLog.Info("tracer shutdown properly")
+	}
 }

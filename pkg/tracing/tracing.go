@@ -19,6 +19,7 @@ const (
 )
 
 var cerberusTracer trace.Tracer
+var tp *tracesdk.TracerProvider
 
 func init() {
 	cerberusTracer = otel.Tracer(CerberusTracerName)
@@ -30,14 +31,15 @@ func SetTracingProvider(provider string, samplingRation float64) error {
 		if err != nil {
 			return err
 		}
-		cerberusTracer = tracesdk.NewTracerProvider(
+		tp = tracesdk.NewTracerProvider(
 			tracesdk.WithBatcher(exporter),
 			tracesdk.WithSampler(tracesdk.ParentBased(tracesdk.TraceIDRatioBased(samplingRation))),
 			tracesdk.WithResource(resource.NewWithAttributes(
 				semconv.SchemaURL,
 				semconv.ServiceNameKey.String(ServiceName),
 			)),
-		).Tracer(CerberusTracerName)
+		)
+		cerberusTracer = tp.Tracer(CerberusTracerName)
 		return nil
 
 	}
@@ -50,4 +52,8 @@ func StartSpan(ctx context.Context, spanName string) (context.Context, trace.Spa
 
 func Tracer() *trace.Tracer {
 	return &cerberusTracer
+}
+
+func Shutdown(ctx context.Context) error {
+	return tp.Shutdown(ctx)
 }

@@ -22,6 +22,7 @@ type Settings struct {
 		Enabled       bool    `yaml:"enabled" env:"ENABLE_TRACING" env-default:"false" env-description:"Enable OpenTelemetry tracing."`
 		Provider      string  `yaml:"provider" env:"TRACING_PROVIDER" env-default:"jaeger" env-description:"only jaeger is available now"`
 		SamplingRatio float64 `yaml:"samplingRatio" env:"TRACING_SAMPLING_RATIO" env-default:"0.001" env-description:"sets sampling portion of requests"`
+		Timeout       float64 `yaml:"timeout" env:"TRACING_TIMEOUT_SECONDS" env-default:"1" env-description:"sets tracing timeout in seconds"`
 	} `yaml:"tracing"`
 }
 

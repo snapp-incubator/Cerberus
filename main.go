@@ -82,11 +82,13 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	if st.Tracing.Enabled {
-		if st.Tracing.Provider == "jaeger" {
-			err = tracing.SetTracingProvider(tracing.JaegerTracing, st.Tracing.SamplingRatio)
-		} else {
-			reportFatalErrorAndExit(fmt.Errorf("invalid-tracing-provider"), "unable to setup environment")
-			return
+		switch st.Tracing.Provider {
+		case "http":
+			err = tracing.SetTracingProvider(tracing.HTTPTracingProvider, st.Tracing.SamplingRatio, st.Tracing.Timeout)
+		case "grpc":
+			err = tracing.SetTracingProvider(tracing.HTTPTracingProvider, st.Tracing.SamplingRatio, st.Tracing.Timeout)
+		default:
+			err = fmt.Errorf("invalid-tracing-provider")
 		}
 	}
 	if err != nil {

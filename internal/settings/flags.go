@@ -19,6 +19,9 @@ func (s Settings) BindFlags(fs *flag.FlagSet) {
 			"You should also set OTEL_EXPORTER_JAEGER_AGENT_HOST and OTEL_EXPORTER_JAEGER_AGENT_PORT.")
 	flag.Float64Var(&s.Tracing.SamplingRatio, "tracing-sampling-ratio", 0.001,
 		"Tracing sampling ration sets sampling portion of requests")
+	flag.Float64Var(&s.Tracing.Timeout, "tracing-sampling-ratio", 1,
+		"sets tracing timeout in seconds")
+
 	flag.BoolVar(&s.LeaderElection.Enabled, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")

@@ -10,6 +10,8 @@ import (
 	"github.com/asaskevich/govalidator"
 	"github.com/go-logr/logr"
 	"github.com/snapp-incubator/Cerberus/api/v1alpha1"
+	"github.com/snapp-incubator/Cerberus/internal/tracing"
+	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -137,6 +139,20 @@ func toExtraHeaders(headers CerberusExtraHeaders) ExtraHeaders {
 // Check is the function which is used to Authenticate and Respond to gRPC envoy.CheckRequest
 func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response, error) {
 	wsvc, ns, reason := readRequestContext(request)
+
+	// generate opentelemetry span with given parameters
+	ctx, span := tracing.StartSpan(ctx, "CheckFunction")
+	defer func() {
+		span.SetAttributes(
+			attribute.String("cerberus-reason", string(reason)),
+		)
+		span.End()
+	}()
+	span.SetAttributes(
+		attribute.String("webservice", wsvc),
+		attribute.String("namespace", ns),
+	)
+
 	if reason != "" {
 		return generateResponse(reason, nil), nil
 	}
@@ -151,7 +167,10 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response,
 	reason, wsvcCacheEntry := a.readService(wsvc)
 	if reason == "" {
 		var cerberusExtraHeaders CerberusExtraHeaders
+
+		// perform TestAccess
 		reason, cerberusExtraHeaders = a.TestAccess(request, wsvcCacheEntry)
+
 		extraHeaders = toExtraHeaders(cerberusExtraHeaders)
 		if reason == CerberusReasonOK && hasUpstreamAuth(wsvcCacheEntry) {
 			request.Context[HasUpstreamAuth] = "true"
@@ -270,9 +289,20 @@ func processResponseError(err error) CerberusReason {
 
 // checkServiceUpstreamAuth function is designed to validate the request through
 // the upstream authentication for a given webservice
-func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, request *Request, extraHeaders *ExtraHeaders, ctx context.Context) CerberusReason {
+func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, request *Request, extraHeaders *ExtraHeaders, ctx context.Context) (reason CerberusReason) {
 	downstreamDeadline, hasDownstreamDeadline := ctx.Deadline()
 	serviceUpstreamAuthCalls.With(AddWithDownstreamDeadline(nil, hasDownstreamDeadline)).Inc()
+
+	_, span := tracing.StartSpan(ctx, "upstream-auth")
+	defer func() {
+		span.SetAttributes(
+			attribute.String("upstream-auth-cerberus-reason", string(reason)),
+		)
+		span.End()
+	}()
+	span.SetAttributes(
+		attribute.String("upstream-auth-address", service.Spec.UpstreamHttpAuth.Address),
+	)
 
 	if reason := validateUpstreamAuthRequest(service); reason != "" {
 		return reason
@@ -294,6 +324,11 @@ func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, 
 
 	labels := AddWithDownstreamDeadline(AddStatusLabel(nil, resp.StatusCode), hasDownstreamDeadline)
 	upstreamAuthRequestDuration.With(labels).Observe(reqDuration.Seconds())
+
+	span.SetAttributes(
+		attribute.Float64("upstream-auth-rtt-seconds", reqDuration.Seconds()),
+		attribute.Int("upstream-auth-status-code", resp.StatusCode),
+	)
 
 	if resp.StatusCode != http.StatusOK {
 		return CerberusReasonUnauthorized

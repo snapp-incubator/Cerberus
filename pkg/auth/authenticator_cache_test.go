@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type Namer interface {
@@ -98,7 +97,7 @@ func TestBuildNewWebservicesCache(t *testing.T) {
 		Items: prepareWebservices(2),
 	}
 	noNamespaceService := v1alpha1.WebService{
-		ObjectMeta: v1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name: "nonamespace",
 		},
 	}
@@ -293,7 +292,7 @@ func TestWebservicesCache_ReadWebservice(t *testing.T) {
 	cache := make(WebservicesCache)
 	cacheEntry := WebservicesCacheEntry{
 		WebService: v1alpha1.WebService{
-			ObjectMeta: v1.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      "webservice1",
 				Namespace: "does not matter",
 			},
@@ -373,7 +372,7 @@ func TestAccessTokensCache_buildAllowedWebservicesCache(t *testing.T) {
 	// Create a mock AccessTokensCacheEntry
 	accessTokenEntry1 := AccessTokensCacheEntry{
 		AccessToken: v1alpha1.AccessToken{
-			ObjectMeta: v1.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      "token1",
 				Namespace: "namespace1",
 			},
@@ -394,7 +393,7 @@ func TestAccessTokensCache_buildAllowedWebservicesCache(t *testing.T) {
 	}
 	accessTokenEntry2 := AccessTokensCacheEntry{
 		AccessToken: v1alpha1.AccessToken{
-			ObjectMeta: v1.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      "token2",
 				Namespace: "namespace1",
 			},
@@ -460,7 +459,7 @@ func TestAccessTokensCacheEntry_buildAllowedWebservicesCache(t *testing.T) {
 	// Create a mock AccessTokensCacheEntry
 	accessToken := AccessTokensCacheEntry{
 		AccessToken: v1alpha1.AccessToken{
-			ObjectMeta: v1.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      "token1",
 				Namespace: "namespace1",
 			},
@@ -533,7 +532,7 @@ func TestAuthenticator_buildNewAccessTokensCache(t *testing.T) {
 
 	secrets.Items = []corev1.Secret{
 		{
-			ObjectMeta: v1.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name: "valid.valid",
 			},
 		},
@@ -544,7 +543,7 @@ func TestAuthenticator_buildNewAccessTokensCache(t *testing.T) {
 
 	secrets.Items = []corev1.Secret{
 		{
-			ObjectMeta: v1.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name: "valid.valid",
 			},
 			Data: map[string][]byte{

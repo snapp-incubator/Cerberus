@@ -114,7 +114,7 @@ func (a *Authenticator) readToken(request *Request, wsvc WebservicesCacheEntry) 
 
 // readService reads requested webservice from cache and
 // will return error if the object would not be found in cache
-func (a *Authenticator) readService(wsvc string) (bool, CerberusReason, WebservicesCacheEntry) {
+func (a *Authenticator) readService(wsvc string) (CerberusReason, WebservicesCacheEntry) {
 	a.cacheLock.RLock()
 	cacheReaders.Inc()
 	defer a.cacheLock.RUnlock()
@@ -122,9 +122,9 @@ func (a *Authenticator) readService(wsvc string) (bool, CerberusReason, Webservi
 
 	res, ok := a.webservicesCache.ReadWebservice(wsvc)
 	if !ok {
-		return false, CerberusReasonWebserviceNotFound, WebservicesCacheEntry{}
+		return CerberusReasonWebserviceNotFound, WebservicesCacheEntry{}
 	}
-	return true, "", res
+	return "", res
 }
 
 func toExtraHeaders(headers CerberusExtraHeaders) ExtraHeaders {
@@ -139,7 +139,7 @@ func toExtraHeaders(headers CerberusExtraHeaders) ExtraHeaders {
 func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response, error) {
 	wsvc, ns, reason := readRequestContext(request)
 	if reason != "" {
-		return generateResponse(false, reason, nil), nil
+		return generateResponse(reason, nil), nil
 	}
 	wsvc = v1alpha1.WebserviceReference{
 		Name:      wsvc,
@@ -149,14 +149,14 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response,
 	request.Context[HasUpstreamAuth] = "false"
 	var extraHeaders ExtraHeaders
 
-	ok, reason, wsvcCacheEntry := a.readService(wsvc)
-	if ok {
+	reason, wsvcCacheEntry := a.readService(wsvc)
+	if reason == "" {
 		var cerberusExtraHeaders CerberusExtraHeaders
 		reason, cerberusExtraHeaders = a.TestAccess(request, wsvcCacheEntry)
 		extraHeaders = toExtraHeaders(cerberusExtraHeaders)
 		if reason == CerberusReasonOK && hasUpstreamAuth(wsvcCacheEntry) {
 			request.Context[HasUpstreamAuth] = "true"
-			ok, reason = a.checkServiceUpstreamAuth(wsvcCacheEntry, request, &extraHeaders, ctx)
+			reason = a.checkServiceUpstreamAuth(wsvcCacheEntry, request, &extraHeaders, ctx)
 		}
 	}
 
@@ -165,7 +165,7 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response,
 		err = status.Error(codes.DeadlineExceeded, "Timeout exceeded")
 	}
 
-	return generateResponse(ok, reason, extraHeaders), err
+	return generateResponse(reason, extraHeaders), err
 }
 
 func readRequestContext(request *Request) (wsvc string, ns string, reason CerberusReason) {
@@ -271,17 +271,17 @@ func processResponseError(err error) CerberusReason {
 
 // checkServiceUpstreamAuth function is designed to validate the request through
 // the upstream authentication for a given webservice
-func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, request *Request, extraHeaders *ExtraHeaders, ctx context.Context) (bool, CerberusReason) {
+func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, request *Request, extraHeaders *ExtraHeaders, ctx context.Context) CerberusReason {
 	downstreamDeadline, hasDownstreamDeadline := ctx.Deadline()
 	serviceUpstreamAuthCalls.With(AddWithDownstreamDeadline(nil, hasDownstreamDeadline)).Inc()
 
 	if reason := validateUpstreamAuthRequest(service); reason != "" {
-		return false, reason
+		return reason
 	}
 	upstreamAuth := service.Spec.UpstreamHttpAuth
 	req, err := setupUpstreamAuthRequest(&upstreamAuth, request)
 	if err != nil {
-		return false, CerberusReasonUpstreamAuthNoReq
+		return CerberusReasonUpstreamAuthNoReq
 	}
 	a.adjustTimeout(upstreamAuth.Timeout, downstreamDeadline, hasDownstreamDeadline)
 
@@ -290,18 +290,18 @@ func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, 
 	reqDuration := time.Since(reqStart)
 
 	if reason := processResponseError(err); reason != "" {
-		return false, reason
+		return reason
 	}
 
 	labels := AddWithDownstreamDeadline(AddStatusLabel(nil, resp.StatusCode), hasDownstreamDeadline)
 	upstreamAuthRequestDuration.With(labels).Observe(reqDuration.Seconds())
 
 	if resp.StatusCode != http.StatusOK {
-		return false, CerberusReasonUnauthorized
+		return CerberusReasonUnauthorized
 	}
 	// add requested careHeaders to extraHeaders for response
 	copyUpstreamHeaders(resp, extraHeaders, service.Spec.UpstreamHttpAuth.CareHeaders)
-	return true, CerberusReasonOK
+	return ""
 }
 
 // hasUpstreamAuth evaluates whether the provided webservice
@@ -313,10 +313,13 @@ func hasUpstreamAuth(service WebservicesCacheEntry) bool {
 // generateResponse initializes defaults for cerberus http result and creates a
 // valid response from cerberus reasons and computed headers to inform the client
 // that it has the access or not.
-func generateResponse(ok bool, reason CerberusReason, extraHeaders ExtraHeaders) *Response {
+func generateResponse(reason CerberusReason, extraHeaders ExtraHeaders) *Response {
+	ok := (reason == "")
+
 	var httpStatusCode int
 	if ok {
 		httpStatusCode = http.StatusOK
+		reason = CerberusReasonOK
 	} else {
 		httpStatusCode = http.StatusUnauthorized
 	}

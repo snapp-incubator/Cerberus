@@ -98,7 +98,6 @@ func (a *Authenticator) TestAccess(request *Request, wsvc WebservicesCacheEntry)
 			return
 		}
 	}
-	reason = CerberusReasonOK
 	return
 }
 

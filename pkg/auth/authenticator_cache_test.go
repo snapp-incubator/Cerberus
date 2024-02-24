@@ -118,7 +118,10 @@ func TestBuildNewWebservicesCache(t *testing.T) {
 	getBindingfromLogs := func(logs testutils.Logs) []string {
 		bindings := make([]string, 0)
 		for _, v := range logs {
-			bindings = append(bindings, v.KeyValues["binding"].(string))
+			fmt.Println(v)
+			if v.Message != "webservice stored" && v.Message != "webservice access cache built successfully" {
+				bindings = append(bindings, v.KeyValues["binding"].(string))
+			}
 		}
 		return bindings
 	}
@@ -136,7 +139,15 @@ func TestBuildNewWebservicesCache(t *testing.T) {
 	assert.ElementsMatch(t, bindingsNamesFromFixtures, bindingsNamesFromLog)
 	for _, log := range bindingLogs {
 		assert.Equal(t, "info", log.Type)
-		assert.Equal(t, "ignored some webservices over binding", log.Message)
+		assert.Contains(
+			t,
+			[]string{
+				"ignored some webservices over binding",
+				"webservice stored",
+				"webservice access cache built successfully",
+			},
+			log.Message,
+		)
 	}
 
 	assert.Len(t, *newWebservicesCache, 2)

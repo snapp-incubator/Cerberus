@@ -126,10 +126,7 @@ func TestReadService(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.wsvc, func(t *testing.T) {
-			ok, reason, _ := authenticator.readService(tc.wsvc)
-			if ok != tc.expectedOk {
-				t.Errorf("Expected success: %v, Got: %v", tc.expectedOk, ok)
-			}
+			reason, _ := authenticator.readService(tc.wsvc)
 			if reason != tc.expectedReason {
 				t.Errorf("Expected reason: %v, Got: %v", tc.expectedReason, reason)
 			}
@@ -241,7 +238,7 @@ func TestTestAccessValidToken(t *testing.T) {
 
 	reason, extraHeaders := authenticator.TestAccess(request, webservice)
 
-	assert.Equal(t, CerberusReasonOK, reason, "Expected reason to be OK")
+	assert.Equal(t, CerberusReasonNotSet, reason, "Expected reason to be OK")
 	assert.Equal(t, "valid-token", extraHeaders[CerberusHeaderAccessToken], "Expected token in extraHeaders")
 }
 
@@ -729,11 +726,11 @@ func Test_generateResponse(t *testing.T) {
 			StatusCode: http.StatusOK,
 			Header: http.Header{
 				ExternalAuthHandlerHeader:  {"cerberus"},
-				CerberusHeaderReasonHeader: {"reason"},
+				CerberusHeaderReasonHeader: {string(CerberusReasonOK)},
 			},
 		},
 	}
-	actualResponse := generateResponse(true, "reason", nil)
+	actualResponse := generateResponse("", nil)
 	assert.Equal(t, expectedResponse.Allow, actualResponse.Allow, "Response should be allowed")
 	assert.Equal(t, expectedResponse.Response.StatusCode, actualResponse.Response.StatusCode, "HTTP status code should match")
 	assert.Equal(t, expectedResponse.Response.Header, actualResponse.Response.Header, "Response headers should match")
@@ -751,7 +748,7 @@ func Test_generateResponse(t *testing.T) {
 			},
 		},
 	}
-	actualResponse = generateResponse(false, "reason", extraHeaders)
+	actualResponse = generateResponse("reason", extraHeaders)
 	assert.Equal(t, expectedResponse.Allow, actualResponse.Allow, "Response should not be allowed")
 	assert.Equal(t, expectedResponse.Response.StatusCode, actualResponse.Response.StatusCode, "HTTP status code should match")
 	assert.Equal(t, expectedResponse.Response.Header, actualResponse.Response.Header, "Response headers should match")

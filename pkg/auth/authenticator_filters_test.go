@@ -151,7 +151,7 @@ func TestAuthenticationTokenAccessValidation_Validate(t *testing.T) {
 		},
 	}
 	ac.allowedWebservicesCache = make(AllowedWebservicesCache)
-	ac.allowedWebservicesCache["test-ws"] = struct{}{}
+	ac.allowedWebservicesCache[wsvc.LocalName()] = struct{}{}
 
 	atcv := AuthenticationTokenAccessValidation{}
 

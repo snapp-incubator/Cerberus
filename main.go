@@ -45,8 +45,8 @@ import (
 	cerberusv1alpha1 "github.com/snapp-incubator/Cerberus/api/v1alpha1"
 	"github.com/snapp-incubator/Cerberus/controllers"
 	"github.com/snapp-incubator/Cerberus/internal/settings"
+	"github.com/snapp-incubator/Cerberus/internal/tracing"
 	"github.com/snapp-incubator/Cerberus/pkg/auth"
-	"github.com/snapp-incubator/Cerberus/pkg/tracing"
 	//+kubebuilder:scaffold:imports
 )
 

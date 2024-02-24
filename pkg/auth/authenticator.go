@@ -10,7 +10,7 @@ import (
 	"github.com/asaskevich/govalidator"
 	"github.com/go-logr/logr"
 	"github.com/snapp-incubator/Cerberus/api/v1alpha1"
-	"github.com/snapp-incubator/Cerberus/pkg/tracing"
+	"github.com/snapp-incubator/Cerberus/internal/tracing"
 	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

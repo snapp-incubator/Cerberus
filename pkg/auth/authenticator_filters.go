@@ -160,7 +160,7 @@ var _ AuthenticationValidation = (*AuthenticationTokenAccessValidation)(nil)
 // Validate checks token and webservice access
 func (adv *AuthenticationTokenAccessValidation) Validate(ac *AccessTokensCacheEntry,
 	wsvc *WebservicesCacheEntry, request *Request) (CerberusReason, CerberusExtraHeaders) {
-	if !ac.TestAccess(wsvc.Name) {
+	if !ac.TestAccess(wsvc.LocalName()) {
 		return CerberusReasonWebserviceNotAllowed, CerberusExtraHeaders{}
 	}
 	return CerberusReasonNotSet, CerberusExtraHeaders{}

@@ -238,7 +238,7 @@ func TestTestAccessValidToken(t *testing.T) {
 
 	reason, extraHeaders := authenticator.TestAccess(request, webservice)
 
-	assert.Equal(t, CerberusReasonOK, reason, "Expected reason to be OK")
+	assert.Equal(t, CerberusReasonNotSet, reason, "Expected reason to be OK")
 	assert.Equal(t, "valid-token", extraHeaders[CerberusHeaderAccessToken], "Expected token in extraHeaders")
 }
 

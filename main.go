@@ -86,7 +86,7 @@ func main() {
 		case "http":
 			err = tracing.SetTracingProvider(tracing.HTTPTracingProvider, st.Tracing.SamplingRatio, st.Tracing.Timeout)
 		case "grpc":
-			err = tracing.SetTracingProvider(tracing.HTTPTracingProvider, st.Tracing.SamplingRatio, st.Tracing.Timeout)
+			err = tracing.SetTracingProvider(tracing.GRPCTracingProvider, st.Tracing.SamplingRatio, st.Tracing.Timeout)
 		default:
 			err = fmt.Errorf("invalid-tracing-provider")
 		}

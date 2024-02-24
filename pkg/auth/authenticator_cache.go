@@ -142,7 +142,7 @@ func (a *Authenticator) buildNewWebservicesCache(
 		}
 	}
 
-	a.logger.Info("webservice access cache built successfully", "len", len(newWebservicesCache))
+	a.logger.Info("webservice access cache built successfully", "len", len(newWebservicesCache), "content", newWebservicesCache)
 	return &newWebservicesCache
 }
 
@@ -199,7 +199,7 @@ func (a *Authenticator) buildNewAccessTokensCache(
 		}
 	}
 
-	a.logger.Info("access token cache built successfully", "len", len(newAccessTokensCache))
+	a.logger.Info("access token cache built successfully", "len", len(newAccessTokensCache), "content", newAccessTokensCache)
 	return &newAccessTokensCache
 }
 

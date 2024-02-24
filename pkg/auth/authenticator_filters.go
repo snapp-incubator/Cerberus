@@ -15,6 +15,8 @@ type AuthenticationValidation interface {
 
 type AuthenticatorPriorityValidation struct{}
 
+var _ AuthenticationValidation = (*AuthenticatorPriorityValidation)(nil)
+
 func (apt *AuthenticatorPriorityValidation) Validate(ac *AccessTokensCacheEntry,
 	wsvc *WebservicesCacheEntry, _ *Request) (CerberusReason, CerberusExtraHeaders) {
 
@@ -31,6 +33,8 @@ func (apt *AuthenticatorPriorityValidation) Validate(ac *AccessTokensCacheEntry,
 }
 
 type AuthenticationIPValidation struct{}
+
+var _ AuthenticationValidation = (*AuthenticationIPValidation)(nil)
 
 // getIPListFromRequest extract IP addresses from request and it's headers
 func getIPListFromRequest(request *http.Request) (CerberusReason, []string) {
@@ -107,6 +111,8 @@ func checkIP(ips []string, ipAllowList []string) (bool, error) {
 // AuthenticationDomainValidation validates for domain definitions
 type AuthenticationDomainValidation struct{}
 
+var _ AuthenticationValidation = (*AuthenticationDomainValidation)(nil)
+
 // Validate checks domain restrictions
 func (adv *AuthenticationDomainValidation) Validate(ac *AccessTokensCacheEntry,
 	wsvc *WebservicesCacheEntry, request *Request) (CerberusReason, CerberusExtraHeaders) {
@@ -148,6 +154,8 @@ func CheckDomain(domain string, domainAllowedList []string) (bool, error) {
 
 // AuthenticationTokenAccessValidation check for token and webservice access
 type AuthenticationTokenAccessValidation struct{}
+
+var _ AuthenticationValidation = (*AuthenticationTokenAccessValidation)(nil)
 
 // Validate checks token and webservice access
 func (adv *AuthenticationTokenAccessValidation) Validate(ac *AccessTokensCacheEntry,

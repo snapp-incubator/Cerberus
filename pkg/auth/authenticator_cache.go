@@ -362,6 +362,7 @@ func (c *AccessTokensCache) ReadAccessToken(rawToken string) (AccessTokensCacheE
 
 // TestAccess
 func (c *AccessTokensCacheEntry) TestAccess(wsvc string) bool {
+	fmt.Println("accessTokenName", c.Name, "givenWsvc", wsvc, "allowedWsvcs", c.allowedWebservicesCache)
 	_, ok := c.allowedWebservicesCache[wsvc]
 	return ok
 }

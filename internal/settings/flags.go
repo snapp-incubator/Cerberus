@@ -14,8 +14,8 @@ func (s Settings) BindFlags(fs *flag.FlagSet) {
 	flag.BoolVar(&s.Tracing.Enabled, "enable-tracing", false,
 		"Enable OpenTelemetry Tracing. "+
 			"After enabling this you should add --tracing-provider")
-	flag.StringVar(&s.Tracing.Provider, "tracing-provider", "jaeger",
-		"Tracing provider, for now only 'jaeger'. "+
+	flag.StringVar(&s.Tracing.Provider, "tracing-provider", "http",
+		"Tracing provider, for now only 'http' and 'grpc'. "+
 			"You should also set OTEL_EXPORTER_JAEGER_AGENT_HOST and OTEL_EXPORTER_JAEGER_AGENT_PORT.")
 	flag.Float64Var(&s.Tracing.SamplingRatio, "tracing-sampling-ratio", 0.001,
 		"Tracing sampling ration sets sampling portion of requests")

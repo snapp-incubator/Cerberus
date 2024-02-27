@@ -66,18 +66,18 @@ func TestAddUpstreamAuthLabel(t *testing.T) {
 }
 func TestAddWithDownstreamDeadline(t *testing.T) {
 	// Test case 1: With downstream deadline
-	labels := AddWithDownstreamDeadline(nil, true)
+	labels := AddWithDownstreamDeadlineLabel(nil, true)
 	assert.NotNil(t, labels, "Labels should not be nil")
 	assert.Equal(t, "true", labels[WithDownstreamDeadlineLabel], "WithDownstreamDeadlineLabel should be true")
 
 	// Test case 2: Without downstream deadline
-	labels = AddWithDownstreamDeadline(nil, false)
+	labels = AddWithDownstreamDeadlineLabel(nil, false)
 	assert.NotNil(t, labels, "Labels should not be nil")
 	assert.Equal(t, "false", labels[WithDownstreamDeadlineLabel], "WithDownstreamDeadlineLabel should be false")
 
 	// Test case 3: Existing labels
 	existingLabels := prometheus.Labels{"existing": "label"}
-	labels = AddWithDownstreamDeadline(existingLabels, true)
+	labels = AddWithDownstreamDeadlineLabel(existingLabels, true)
 	assert.NotNil(t, labels, "Labels should not be nil")
 	assert.Equal(t, "true", labels[WithDownstreamDeadlineLabel], "WithDownstreamDeadlineLabel should be true")
 	assert.Equal(t, "label", labels["existing"], "Existing label should remain unchanged")

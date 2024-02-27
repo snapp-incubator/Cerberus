@@ -230,7 +230,7 @@ func TestTestAccessValidToken(t *testing.T) {
 		WebService: cerberusv1alpha1.WebService{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "SampleWebService",
-				Namespace: "SampleNameSpace",
+				Namespace: "SampleNamespace",
 			},
 			Spec: cerberusv1alpha1.WebServiceSpec{
 				LookupHeader: string(CerberusHeaderAccessToken),

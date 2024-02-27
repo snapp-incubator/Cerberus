@@ -144,7 +144,8 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (finalRespo
 	wsvc, ns, reason := readRequestContext(request)
 
 	// generate opentelemetry span with given parameters
-	ctx, span := tracing.StartSpan(ctx, "CheckFunction",
+	parentCtx := tracing.ReadParentSpanFromRequest(ctx, request.Request)
+	ctx, span := tracing.StartSpan(parentCtx, "CheckFunction",
 		attribute.String("webservice", wsvc),
 		attribute.String("namespace", ns),
 	)

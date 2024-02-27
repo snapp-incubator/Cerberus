@@ -3,6 +3,7 @@ package tracing
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -10,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
@@ -81,6 +83,12 @@ func EndSpan(span trace.Span, start_time time.Time, extraAttrs ...attribute.KeyV
 	)
 	span.SetAttributes(extraAttrs...)
 	span.End()
+}
+
+func ReadParentSpanFromRequest(ctx context.Context, req http.Request) context.Context {
+	return otel.GetTextMapPropagator().Extract(
+		ctx, propagation.HeaderCarrier(req.Header),
+	)
 }
 
 func Tracer() *trace.Tracer {

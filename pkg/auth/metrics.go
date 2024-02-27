@@ -173,7 +173,7 @@ func AddUpstreamAuthLabel(labels prometheus.Labels, hasUpstreamAuth string) prom
 	return labels
 }
 
-func AddWithDownstreamDeadline(labels prometheus.Labels, hasDeadline bool) prometheus.Labels {
+func AddWithDownstreamDeadlineLabel(labels prometheus.Labels, hasDeadline bool) prometheus.Labels {
 	if labels == nil {
 		labels = prometheus.Labels{}
 	}

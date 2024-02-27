@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/snapp-incubator/Cerberus/api/v1alpha1"
 	"github.com/snapp-incubator/Cerberus/internal/tracing"
 	"go.opentelemetry.io/otel/attribute"
+	otelcodes "go.opentelemetry.io/otel/codes"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -137,21 +139,32 @@ func toExtraHeaders(headers CerberusExtraHeaders) ExtraHeaders {
 }
 
 // Check is the function which is used to Authenticate and Respond to gRPC envoy.CheckRequest
-func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response, error) {
+func (a *Authenticator) Check(ctx context.Context, request *Request) (finalResponse *Response, err error) {
+	start_time := time.Now()
 	wsvc, ns, reason := readRequestContext(request)
 
 	// generate opentelemetry span with given parameters
-	ctx, span := tracing.StartSpan(ctx, "CheckFunction")
-	defer func() {
-		span.SetAttributes(
-			attribute.String("cerberus-reason", string(reason)),
-		)
-		span.End()
-	}()
-	span.SetAttributes(
+	parentCtx := tracing.ReadParentSpanFromRequest(ctx, request.Request)
+	ctx, span := tracing.StartSpan(parentCtx, "CheckFunction",
 		attribute.String("webservice", wsvc),
 		attribute.String("namespace", ns),
 	)
+	defer func() {
+		extraAttrs := []attribute.KeyValue{
+			attribute.String("cerberus-reason", string(reason)),
+		}
+		if finalResponse != nil {
+			extraAttrs = append(extraAttrs,
+				attribute.Bool("final-response-ok", finalResponse.Allow),
+			)
+			for k, v := range finalResponse.Response.Header {
+				extraAttrs = append(extraAttrs,
+					attribute.String("final-extra-headers-"+k, strings.Join(v, ",")),
+				)
+			}
+		}
+		tracing.EndSpan(span, start_time, extraAttrs...)
+	}()
 
 	if reason != "" {
 		return generateResponse(reason, nil), nil
@@ -178,12 +191,12 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (*Response,
 		}
 	}
 
-	var err error
 	if reason == CerberusReasonUpstreamAuthTimeout || reason == CerberusReasonUpstreamAuthFailed {
 		err = status.Error(codes.DeadlineExceeded, "Timeout exceeded")
 	}
 
-	return generateResponse(reason, extraHeaders), err
+	finalResponse = generateResponse(reason, extraHeaders)
+	return
 }
 
 func readRequestContext(request *Request) (wsvc string, ns string, reason CerberusReason) {
@@ -290,19 +303,18 @@ func processResponseError(err error) CerberusReason {
 // checkServiceUpstreamAuth function is designed to validate the request through
 // the upstream authentication for a given webservice
 func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, request *Request, extraHeaders *ExtraHeaders, ctx context.Context) (reason CerberusReason) {
+	start_time := time.Now()
 	downstreamDeadline, hasDownstreamDeadline := ctx.Deadline()
-	serviceUpstreamAuthCalls.With(AddWithDownstreamDeadline(nil, hasDownstreamDeadline)).Inc()
+	serviceUpstreamAuthCalls.With(AddWithDownstreamDeadlineLabel(nil, hasDownstreamDeadline)).Inc()
 
-	_, span := tracing.StartSpan(ctx, "upstream-auth")
-	defer func() {
-		span.SetAttributes(
-			attribute.String("upstream-auth-cerberus-reason", string(reason)),
-		)
-		span.End()
-	}()
-	span.SetAttributes(
+	_, span := tracing.StartSpan(ctx, "cerberus-upstream-auth",
 		attribute.String("upstream-auth-address", service.Spec.UpstreamHttpAuth.Address),
 	)
+	defer func() {
+		tracing.EndSpan(span, start_time,
+			attribute.String("cerberus-reason", string(reason)),
+		)
+	}()
 
 	if reason := validateUpstreamAuthRequest(service); reason != "" {
 		return reason
@@ -318,17 +330,20 @@ func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, 
 	resp, err := a.httpClient.Do(req)
 	reqDuration := time.Since(reqStart)
 
-	if reason := processResponseError(err); reason != "" {
-		return reason
-	}
-
-	labels := AddWithDownstreamDeadline(AddStatusLabel(nil, resp.StatusCode), hasDownstreamDeadline)
-	upstreamAuthRequestDuration.With(labels).Observe(reqDuration.Seconds())
-
 	span.SetAttributes(
-		attribute.Float64("upstream-auth-rtt-seconds", reqDuration.Seconds()),
+		attribute.String("upstream-http-request-start", reqStart.Format(tracing.TimeFormat)),
+		attribute.String("upstream-http-request-end", time.Now().Format(tracing.TimeFormat)),
+		attribute.Float64("upstream-http-request-rtt-seconds", time.Since(reqStart).Seconds()),
 		attribute.Int("upstream-auth-status-code", resp.StatusCode),
 	)
+	labels := AddWithDownstreamDeadlineLabel(AddStatusLabel(nil, resp.StatusCode), hasDownstreamDeadline)
+	upstreamAuthRequestDuration.With(labels).Observe(reqDuration.Seconds())
+
+	if reason := processResponseError(err); reason != "" {
+		span.RecordError(err)
+		span.SetStatus(otelcodes.Error, "upstream auth http request faild")
+		return reason
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		return CerberusReasonUnauthorized

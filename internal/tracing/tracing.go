@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -20,6 +21,7 @@ const (
 	ServiceName         = "cerberus"
 	HTTPTracingProvider = "http-tracing-provider"
 	GRPCTracingProvider = "grpc-tracing-provider"
+	TimeFormat          = time.RFC3339Nano
 )
 
 var cerberusTracer trace.Tracer
@@ -61,8 +63,24 @@ func SetTracingProvider(provider string, samplingRation float64, timeout float64
 	return
 }
 
-func StartSpan(ctx context.Context, spanName string) (context.Context, trace.Span) {
-	return cerberusTracer.Start(ctx, spanName)
+func StartSpan(ctx context.Context, spanName string, extraAttrs ...attribute.KeyValue) (context.Context, trace.Span) {
+	newCtx, span := cerberusTracer.Start(ctx, spanName,
+		trace.WithSpanKind(trace.SpanKindServer),
+	)
+	extraAttrs = append(extraAttrs,
+		attribute.String("start-time", time.Now().Format(TimeFormat)),
+	)
+	span.SetAttributes(extraAttrs...)
+	return newCtx, span
+}
+
+func EndSpan(span trace.Span, start_time time.Time, extraAttrs ...attribute.KeyValue) {
+	extraAttrs = append(extraAttrs,
+		attribute.String("end-time", time.Now().Format(TimeFormat)),
+		attribute.Float64("duration_seconds", time.Since(start_time).Seconds()),
+	)
+	span.SetAttributes(extraAttrs...)
+	span.End()
 }
 
 func Tracer() *trace.Tracer {

@@ -203,11 +203,12 @@ func TestTestAccessValidToken(t *testing.T) {
 	tokenEntry := AccessTokensCacheEntry{
 		AccessToken: cerberusv1alpha1.AccessToken{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "valid-token",
+				Name:      "valid-token",
+				Namespace: "SampleNamespace",
 			},
 		},
 		allowedWebservicesCache: map[string]struct{}{
-			"SampleWebService": {},
+			"SampleNamespace/SampleWebService": {},
 		},
 	}
 	(*authenticator.accessTokensCache)["valid-token"] = tokenEntry
@@ -218,6 +219,7 @@ func TestTestAccessValidToken(t *testing.T) {
 	request := &Request{
 		Context: map[string]string{
 			"webservice": "SampleWebService",
+			"namespace":  "SampleNamespace",
 		},
 		Request: http.Request{
 			Header: headers,
@@ -227,7 +229,8 @@ func TestTestAccessValidToken(t *testing.T) {
 	webservice := WebservicesCacheEntry{
 		WebService: cerberusv1alpha1.WebService{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "SampleWebService",
+				Name:      "SampleWebService",
+				Namespace: "SampleNamespace",
 			},
 			Spec: cerberusv1alpha1.WebServiceSpec{
 				LookupHeader: string(CerberusHeaderAccessToken),
@@ -239,7 +242,8 @@ func TestTestAccessValidToken(t *testing.T) {
 	reason, extraHeaders := authenticator.TestAccess(request, webservice)
 
 	assert.Equal(t, CerberusReasonNotSet, reason, "Expected reason to be OK")
-	assert.Equal(t, "valid-token", extraHeaders[CerberusHeaderAccessToken], "Expected token in extraHeaders")
+	assert.Equal(t, "SampleNamespace/valid-token", extraHeaders[CerberusHeaderAccessToken], "Expected token in extraHeaders")
+	assert.Equal(t, "SampleNamespace/SampleWebService", extraHeaders[CerberusHeaderWebservice], "Expected webservice in extraHeader")
 }
 
 func TestTestAccessInvalidToken(t *testing.T) {
@@ -328,7 +332,8 @@ func TestTestAccessBadIPList(t *testing.T) {
 	tokenEntry := AccessTokensCacheEntry{
 		AccessToken: cerberusv1alpha1.AccessToken{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "valid-token",
+				Name:      "valid-token",
+				Namespace: "SampleNamespace",
 			},
 			Spec: cerberusv1alpha1.AccessTokenSpec{
 				AllowedIPs: []string{"192.168.1.1", "192.168.1.2"},
@@ -358,7 +363,8 @@ func TestTestAccessBadIPList(t *testing.T) {
 	webservice := WebservicesCacheEntry{
 		WebService: cerberusv1alpha1.WebService{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "SampleWebService",
+				Name:      "SampleWebService",
+				Namespace: "SampleNamespace",
 			},
 			Spec: cerberusv1alpha1.WebServiceSpec{
 				LookupHeader: string(CerberusHeaderAccessToken),
@@ -366,12 +372,13 @@ func TestTestAccessBadIPList(t *testing.T) {
 		},
 	}
 
-	(*authenticator.webservicesCache)["SampleWebService"] = webservice
+	(*authenticator.webservicesCache)["SampleNamespace/SampleWebService"] = webservice
 
 	reason, extraHeaders := authenticator.TestAccess(request, webservice)
 
 	assert.Equal(t, CerberusReasonBadIpList, reason, "Expected reason to be BadIpList")
-	assert.Equal(t, extraHeaders[CerberusHeaderAccessToken], "valid-token", "Expected AccessToken Name as a Header")
+	assert.Equal(t, extraHeaders[CerberusHeaderAccessToken], "SampleNamespace/valid-token", "Expected AccessToken LocalName as a Header")
+	assert.Equal(t, extraHeaders[CerberusHeaderWebservice], "SampleNamespace/SampleWebService", "Expected Webservice LocalName as a Header")
 }
 
 func TestTestAccessLimited(t *testing.T) {

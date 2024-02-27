@@ -97,6 +97,10 @@ type AccessTokenList struct {
 	Items           []AccessToken `json:"items"`
 }
 
+func (at AccessToken) LocalName() string {
+	return at.Namespace + "/" + at.Name
+}
+
 func init() {
 	SchemeBuilder.Register(&AccessToken{}, &AccessTokenList{})
 }

@@ -58,6 +58,7 @@ const (
 	CerberusHeaderTokenPriority         CerberusHeaderName = "X-Cerberus-Token-Priority"
 	CerberusHeaderWebServiceMinPriority CerberusHeaderName = "X-Cerberus-Webservice-Min-Priority"
 	CerberusHeaderAccessToken           CerberusHeaderName = "X-Cerberus-AccessToken"
+	CerberusHeaderWebservice            CerberusHeaderName = "X-Cerberus-Webservice"
 )
 
 // Access limit reasons
@@ -92,7 +93,8 @@ func (a *Authenticator) TestAccess(request *Request, wsvc WebservicesCacheEntry)
 		return
 	}
 
-	newExtraHeaders.set(CerberusHeaderAccessToken, ac.ObjectMeta.Name)
+	newExtraHeaders.set(CerberusHeaderAccessToken, ac.LocalName())
+	newExtraHeaders.set(CerberusHeaderWebservice, wsvc.LocalName())
 
 	for _, validator := range a.validators {
 		var headers CerberusExtraHeaders

@@ -152,12 +152,16 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (finalRespo
 	defer func() {
 		extraAttrs := []attribute.KeyValue{
 			attribute.String("cerberus-reason", string(reason)),
-			attribute.Bool("final-response-ok", finalResponse.Allow),
 		}
-		for k, v := range finalResponse.Response.Header {
+		if finalResponse != nil {
 			extraAttrs = append(extraAttrs,
-				attribute.String("final-extra-headers-"+k, strings.Join(v, ",")),
+				attribute.Bool("final-response-ok", finalResponse.Allow),
 			)
+			for k, v := range finalResponse.Response.Header {
+				extraAttrs = append(extraAttrs,
+					attribute.String("final-extra-headers-"+k, strings.Join(v, ",")),
+				)
+			}
 		}
 		tracing.EndSpan(span, start_time, extraAttrs...)
 	}()

@@ -6,6 +6,7 @@ type Settings struct {
 	AuthServerAddress string `yaml:"bindAddress" env:"BIND_ADDRESS" env-default:":8082" env-description:"The address the authorization service binds to."`
 	MetricsAddress    string `yaml:"metricsBindAddress" env:"METRICS_BIND_ADDRESS" env-default:":8080" env-description:"The address the metric endpoint binds to."`
 	ProbeAddress      string `yaml:"healthProbeBindAddress" env:"PROBE_BIND_ADDRESS" env-default:":8081" env-description:"The address the probe endpoint binds to."`
+	AccessLogLevel    string `yaml:"accessLogLevel" env:"ACCESS_LOG_LEVEL" env-default:"info" env-description:"The Cerberus access log level (debug will print all requests and headers)"`
 
 	TLS struct {
 		CertPath string `yaml:"certPath" env:"AUTH_SERVER_TLS_CERT_PATH" env-default:"" env-description:"grpc Authentication server TLS certificate file path"`

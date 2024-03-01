@@ -6,6 +6,7 @@ func (s Settings) BindFlags(fs *flag.FlagSet) {
 	flag.StringVar(&s.MetricsAddress, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&s.ProbeAddress, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.StringVar(&s.AuthServerAddress, "address", ":8082", "The address the authorization service binds to.")
+	flag.StringVar(&s.AccessLogLevel, "access-log-level", "info", "The Cerberus access log level (debug will print all requests and headers)")
 
 	flag.StringVar(&s.TLS.CertPath, "tls-cert-path", "", "grpc Authentication server TLS certificate")
 	flag.StringVar(&s.TLS.KeyPath, "tls-key-path", "", "grpc Authentication server TLS key")

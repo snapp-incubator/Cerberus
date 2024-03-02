@@ -243,6 +243,7 @@ func setupAuthenticationServer(st settings.Settings) (net.Listener, *grpc.Server
 
 	authenticator := auth.NewAuthenticator(
 		setupLog.WithName("cerberus.authenticator"),
+		st,
 	)
 
 	auth.RegisterServer(srv, authenticator)

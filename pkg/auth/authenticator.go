@@ -240,12 +240,13 @@ func defineValidators() []AuthenticationValidation {
 
 // NewAuthenticator creates new Authenticator object with given logger.
 // currently it's not returning any error
-func NewAuthenticator(logger logr.Logger) *Authenticator {
+func NewAuthenticator(logger logr.Logger, st settings.Settings) *Authenticator {
 	a := Authenticator{
 		logger:     logger,
 		httpClient: &http.Client{},
 	}
 	a.validators = defineValidators()
+	a.settings = st
 	return &a
 }
 

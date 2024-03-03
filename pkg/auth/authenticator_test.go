@@ -978,3 +978,182 @@ func TestSetupUpstreamAuthRequest(t *testing.T) {
 	assert.Nil(t, actualReq, "Request should be nil when there is an error")
 	assert.Error(t, actualErr, "Error should occur when service is empty")
 }
+
+func TestCheck_SuccessfulAuthentication(t *testing.T) {
+	authenticator := &Authenticator{
+		accessTokensCache: &AccessTokensCache{},
+		webservicesCache:  &WebservicesCache{},
+	}
+	tokens := prepareAccessTokens(1)
+    services := prepareWebservices(1)
+
+	tokenEntry := AccessTokensCacheEntry{
+		AccessToken: tokens[0],
+		allowedWebservicesCache: map[string]struct{}{
+			"default/webservice-1": {},
+		},
+	}
+	(*authenticator.accessTokensCache)["valid-token"] = tokenEntry
+
+	headers := http.Header{}
+	headers.Set(string(CerberusHeaderAccessToken), "valid-token")
+
+	request := &Request{
+        Context: map[string]string{
+            "webservice": services[0].Name,
+            "namespace":  "default",
+        },
+        Request: http.Request{
+            Header: headers,
+        },
+    }
+
+	webserviceKey := fmt.Sprintf("%s/%s", "default", services[0].Name) 
+	authenticator.webservicesCache = &WebservicesCache{
+		webserviceKey: WebservicesCacheEntry{WebService: services[0]},
+	}
+
+    finalResponse, err := authenticator.Check(context.Background(), request)
+
+    assert.NoError(t, err, "Expected no error for successful authentication")
+    assert.NotNil(t, finalResponse, "Expected a non-nil response for successful authentication")
+    assert.True(t, finalResponse.Allow, "Expected the request to be allowed for valid token and service")
+}
+
+
+func TestCheck_TokenNotFound(t *testing.T) {
+    authenticator := &Authenticator{
+        accessTokensCache: &AccessTokensCache{}, 
+        webservicesCache:  &WebservicesCache{},
+    }
+
+    services := prepareWebservices(1)
+
+    headers := http.Header{}
+    headers.Set(string(CerberusHeaderAccessToken), "nonexistent-token")
+
+    request := &Request{
+        Context: map[string]string{
+            "webservice": services[0].Name,
+            "namespace":  "default",
+        },
+        Request: http.Request{
+            Header: headers,
+        },
+    }
+
+    webserviceKey := fmt.Sprintf("%s/%s", "default", services[0].Name)
+    authenticator.webservicesCache = &WebservicesCache{
+        webserviceKey: WebservicesCacheEntry{WebService: services[0]},
+    }
+
+    finalResponse, err := authenticator.Check(context.Background(), request)
+
+    assert.NoError(t, err, "Expected no error from Check function itself")
+    assert.NotNil(t, finalResponse, "Expected a non-nil response even for token not found scenario")
+    assert.False(t, finalResponse.Allow, "Expected the request to not be allowed due to token not found")
+    assert.Contains(t, finalResponse.Response.Header.Get("X-Cerberus-Reason"), "token-not-found", "Expected X-Cerberus-Reason header to indicate token not found")
+}
+
+func TestCheck_ServiceNotFound(t *testing.T) {
+    authenticator := &Authenticator{
+        accessTokensCache: &AccessTokensCache{},
+        webservicesCache:  &WebservicesCache{},
+    }
+
+    tokens := prepareAccessTokens(1)
+
+    tokenEntry := AccessTokensCacheEntry{
+        AccessToken: tokens[0],
+        allowedWebservicesCache: map[string]struct{}{}, 
+    }
+    (*authenticator.accessTokensCache)["valid-token"] = tokenEntry
+
+    headers := http.Header{}
+    headers.Set(string(CerberusHeaderAccessToken), "valid-token")
+
+    request := &Request{
+        Context: map[string]string{
+            "webservice": "nonexistent-service",
+            "namespace":  "default",
+        },
+        Request: http.Request{
+            Header: headers,
+        },
+    }
+
+    finalResponse, err := authenticator.Check(context.Background(), request)
+
+    assert.NoError(t, err, "Expected no error even if service is not found")
+    assert.NotNil(t, finalResponse, "Expected a non-nil response even if service is not found")
+    assert.False(t, finalResponse.Allow, "Expected the request to be denied due to service not found")
+    assert.Contains(t, finalResponse.Response.Header.Get("X-Cerberus-Reason"), "webservice-notfound", "Expected webservice-notfound reason")
+}
+
+func TestCheck_EmptyToken(t *testing.T) {
+    authenticator := &Authenticator{
+        accessTokensCache: &AccessTokensCache{},
+        webservicesCache:  &WebservicesCache{},
+    }
+    services := prepareWebservices(1)
+
+    webserviceKey := fmt.Sprintf("%s/%s", "default", services[0].Name)
+    (*authenticator.webservicesCache)[webserviceKey] = WebservicesCacheEntry{WebService: services[0]}
+
+    headers := http.Header{}
+
+    request := &Request{
+        Context: map[string]string{
+            "webservice": services[0].Name,
+            "namespace":  "default",
+        },
+        Request: http.Request{
+            Header: headers,
+        },
+    }
+
+    finalResponse, err := authenticator.Check(context.Background(), request)
+
+    assert.NoError(t, err, "Expected no error for empty token scenario")
+    assert.NotNil(t, finalResponse, "Expected a non-nil response for empty token scenario")
+    assert.False(t, finalResponse.Allow, "Expected the request to be denied due to empty token")
+    assert.Equal(t, http.StatusUnauthorized, finalResponse.Response.StatusCode, "Expected a 401 Unauthorized status code")
+    assert.Contains(t, finalResponse.Response.Header.Get("X-Cerberus-Reason"), "token-empty", "Expected reason to indicate empty token")
+}
+
+func TestCheck_InvalidServiceName(t *testing.T) {
+    authenticator := &Authenticator{
+        accessTokensCache: &AccessTokensCache{},
+        webservicesCache:  &WebservicesCache{},
+    }
+    tokens := prepareAccessTokens(1)
+
+    tokenEntry := AccessTokensCacheEntry{
+        AccessToken: tokens[0],
+        allowedWebservicesCache: map[string]struct{}{
+            "default/valid-service": {},
+        },
+    }
+    (*authenticator.accessTokensCache)["valid-token"] = tokenEntry
+
+    headers := http.Header{}
+    headers.Set(string(CerberusHeaderAccessToken), "valid-token")
+
+    request := &Request{
+        Context: map[string]string{
+            "webservice": "invalid-service",
+            "namespace":  "default",
+        },
+        Request: http.Request{
+            Header: headers,
+        },
+    }
+
+    finalResponse, err := authenticator.Check(context.Background(), request)
+
+    assert.NoError(t, err, "Expected no error for invalid service name scenario")
+    assert.NotNil(t, finalResponse, "Expected a non-nil response for invalid service name scenario")
+    assert.False(t, finalResponse.Allow, "Expected the request to be denied due to invalid service name")
+    assert.Equal(t, http.StatusUnauthorized, finalResponse.Response.StatusCode, "Expected a 401 Unauthorized status code")
+    assert.Contains(t, finalResponse.Response.Header.Get("X-Cerberus-Reason"), "webservice-notfound", "Expected reason to indicate service not found")
+}

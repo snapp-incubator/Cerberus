@@ -153,7 +153,9 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (finalRespo
 		if a.settings.AccessLogLevel == settings.LogLevelDebug {
 			a.logger.Info("check request result",
 				"request", fmt.Sprintf("%#v", *request),
-				"response", fmt.Sprintf("%#v", *finalResponse))
+				"response", fmt.Sprintf("%#v", *finalResponse),
+				"duration", fmt.Sprintf("%vms", time.Since(start_time).Milliseconds()),
+			)
 		}
 	}()
 

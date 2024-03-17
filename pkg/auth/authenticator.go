@@ -187,7 +187,7 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (finalRespo
 		reason, cerberusExtraHeaders = a.TestAccess(request, wsvcCacheEntry)
 
 		extraHeaders = toExtraHeaders(cerberusExtraHeaders)
-		if reason == CerberusReasonOK && hasUpstreamAuth(wsvcCacheEntry) {
+		if reason == "" && hasUpstreamAuth(wsvcCacheEntry) {
 			request.Context[HasUpstreamAuth] = "true"
 			reason = a.checkServiceUpstreamAuth(wsvcCacheEntry, request, &extraHeaders, ctx)
 		}

@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -1156,4 +1158,57 @@ func TestCheck_InvalidServiceName(t *testing.T) {
     assert.False(t, finalResponse.Allow, "Expected the request to be denied due to invalid service name")
     assert.Equal(t, http.StatusUnauthorized, finalResponse.Response.StatusCode, "Expected a 401 Unauthorized status code")
     assert.Contains(t, finalResponse.Response.Header.Get("X-Cerberus-Reason"), "webservice-notfound", "Expected reason to indicate service not found")
+}
+
+func TestCheck_UpstreamAuthUnauthorized(t *testing.T) {
+    mockHTTPClient := &http.Client{
+        Transport: &MockTransport{
+            DoFunc: func(req *http.Request) (*http.Response, error) {
+                return &http.Response{
+                    StatusCode: http.StatusUnauthorized,
+                    Body:       io.NopCloser(strings.NewReader("Unauthorized")),
+                }, nil
+            },
+        },
+    }
+
+    authenticator := &Authenticator{
+        httpClient: mockHTTPClient,
+        accessTokensCache: &AccessTokensCache{},
+        webservicesCache:  &WebservicesCache{},
+    }
+
+    services := prepareWebservices(1) 
+    tokens := prepareAccessTokens(1)
+
+    tokenEntry := AccessTokensCacheEntry{
+        AccessToken: tokens[0],
+        allowedWebservicesCache: map[string]struct{}{
+            "default/" + services[0].Name: {},
+        },
+    }
+    (*authenticator.accessTokensCache)["valid-token"] = tokenEntry
+
+    webserviceKey := fmt.Sprintf("%s/%s", "default", services[0].Name)
+    (*authenticator.webservicesCache)[webserviceKey] = WebservicesCacheEntry{WebService: services[0]}
+
+    headers := http.Header{}
+    headers.Set(string(CerberusHeaderAccessToken), "valid-token")
+
+    request := &Request{
+        Context: map[string]string{
+            "webservice": services[0].Name,
+            "namespace":  "default",
+        },
+        Request: http.Request{
+            Header: headers,
+        },
+    }
+
+    finalResponse, err := authenticator.Check(context.Background(), request)
+
+    assert.NoError(t, err, "Did not expect an error from Check function")
+    assert.NotNil(t, finalResponse, "Expected a non-nil response")
+    assert.False(t, finalResponse.Allow, "Expected the request to be denied due to unauthorized upstream authentication")
+    assert.Equal(t, "unauthorized", finalResponse.Response.Header.Get("X-Cerberus-Reason"), "Expected reason to indicate unauthorized")
 }

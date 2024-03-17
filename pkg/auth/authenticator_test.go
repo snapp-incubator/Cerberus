@@ -982,10 +982,22 @@ func TestSetupUpstreamAuthRequest(t *testing.T) {
 }
 
 func TestCheck_SuccessfulAuthentication(t *testing.T) {
-	authenticator := &Authenticator{
-		accessTokensCache: &AccessTokensCache{},
-		webservicesCache:  &WebservicesCache{},
-	}
+	mockHTTPClient := &http.Client{
+        Transport: &MockTransport{
+            DoFunc: func(req *http.Request) (*http.Response, error) {
+                return &http.Response{
+                    StatusCode: http.StatusOK,
+                    Body:       io.NopCloser(strings.NewReader("")),
+                }, nil
+            },
+        },
+    }
+
+    authenticator := &Authenticator{
+        httpClient: mockHTTPClient,
+        accessTokensCache: &AccessTokensCache{},
+        webservicesCache:  &WebservicesCache{},
+    }
 	tokens := prepareAccessTokens(1)
     services := prepareWebservices(1)
 

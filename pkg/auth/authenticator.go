@@ -336,10 +336,21 @@ func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, 
 		attribute.String("upstream-http-request-start", reqStart.Format(tracing.TimeFormat)),
 		attribute.String("upstream-http-request-end", time.Now().Format(tracing.TimeFormat)),
 		attribute.Float64("upstream-http-request-rtt-seconds", time.Since(reqStart).Seconds()),
-		attribute.Int("upstream-auth-status-code", resp.StatusCode),
 	)
-	labels := AddWithDownstreamDeadlineLabel(AddStatusLabel(nil, resp.StatusCode), hasDownstreamDeadline)
-	upstreamAuthRequestDuration.With(labels).Observe(reqDuration.Seconds())
+
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(otelcodes.Error, err.Error())
+		return CerberusReasonUpstreamAuthFailed
+	}
+	
+	if resp != nil {
+		span.SetAttributes(attribute.Int("upstream-auth-status-code", resp.StatusCode))
+		labels := AddWithDownstreamDeadlineLabel(AddStatusLabel(nil, resp.StatusCode), hasDownstreamDeadline)
+		upstreamAuthRequestDuration.With(labels).Observe(reqDuration.Seconds())
+	} else {
+		span.SetStatus(otelcodes.Error, "Unexpected nil response")
+	}
 
 	if reason := processResponseError(err); reason != "" {
 		span.RecordError(err)

@@ -1230,8 +1230,11 @@ func TestCheck_UpstreamAuthTimeout(t *testing.T) {
 	mockHTTPClient := &http.Client{
 		Transport: &MockTransport{
 			DoFunc: func(req *http.Request) (*http.Response, error) {
-				// Return a simulated timeout error
-				return nil, &url.Error{
+				return &http.Response{
+                    StatusCode: http.StatusInternalServerError,
+                    Body:       io.NopCloser(strings.NewReader("Internal Server Error")),
+                    Header:     make(http.Header),
+                }, &url.Error{
 					Op:  "Get",
 					URL: "http://fake-upstream-service/authenticate",
 					Err: errors.New("timeout"),
@@ -1277,6 +1280,6 @@ func TestCheck_UpstreamAuthTimeout(t *testing.T) {
 
 	assert.NoError(t, err, "Expected no error from Check function itself")
 	assert.NotNil(t, finalResponse, "Expected a non-nil response")
-	assert.False(t, finalResponse.Allow, "Expected the request to be denied due to upstream authentication timeout")
-	assert.Equal(t, CerberusReasonUpstreamAuthTimeout, finalResponse.Response.Header.Get("X-Cerberus-Reason"), "Expected reason to indicate upstream authentication timeout")
+	assert.False(t, finalResponse.Allow, "Expected the request to be denied due to upstream authentication failed")
+	assert.Equal(t, "upstream-auth-failed", finalResponse.Response.Header.Get("X-Cerberus-Reason"), "Expected reason to indicate upstream authentication failed")
 }

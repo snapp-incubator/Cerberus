@@ -187,7 +187,7 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (finalRespo
 		reason, cerberusExtraHeaders = a.TestAccess(request, wsvcCacheEntry)
 
 		extraHeaders = toExtraHeaders(cerberusExtraHeaders)
-		if reason == CerberusReasonOK && hasUpstreamAuth(wsvcCacheEntry) {
+		if reason == "" && hasUpstreamAuth(wsvcCacheEntry) {
 			request.Context[HasUpstreamAuth] = "true"
 			reason = a.checkServiceUpstreamAuth(wsvcCacheEntry, request, &extraHeaders, ctx)
 		}
@@ -336,10 +336,16 @@ func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, 
 		attribute.String("upstream-http-request-start", reqStart.Format(tracing.TimeFormat)),
 		attribute.String("upstream-http-request-end", time.Now().Format(tracing.TimeFormat)),
 		attribute.Float64("upstream-http-request-rtt-seconds", time.Since(reqStart).Seconds()),
-		attribute.Int("upstream-auth-status-code", resp.StatusCode),
 	)
-	labels := AddWithDownstreamDeadlineLabel(AddStatusLabel(nil, resp.StatusCode), hasDownstreamDeadline)
-	upstreamAuthRequestDuration.With(labels).Observe(reqDuration.Seconds())
+
+	if resp != nil {
+		span.SetAttributes(attribute.Int("upstream-auth-status-code", resp.StatusCode))
+		labels := AddWithDownstreamDeadlineLabel(AddStatusLabel(nil, resp.StatusCode), hasDownstreamDeadline)
+		upstreamAuthRequestDuration.With(labels).Observe(reqDuration.Seconds())
+	} else {
+		labels := AddWithDownstreamDeadlineLabel(nil, hasDownstreamDeadline)
+		upstreamAuthFailedRequests.With(labels).Inc()
+	}
 
 	if reason := processResponseError(err); reason != "" {
 		span.RecordError(err)

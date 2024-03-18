@@ -343,7 +343,7 @@ func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, 
 		labels := AddWithDownstreamDeadlineLabel(AddStatusLabel(nil, resp.StatusCode), hasDownstreamDeadline)
 		upstreamAuthRequestDuration.With(labels).Observe(reqDuration.Seconds())
 	} else {
-		labels := AddWithDownstreamDeadlineLabel(AddStatusLabel(nil, resp.StatusCode), hasDownstreamDeadline)
+		labels := AddWithDownstreamDeadlineLabel(nil, hasDownstreamDeadline)
 		upstreamAuthFailedRequests.With(labels).Inc()
 	}
 

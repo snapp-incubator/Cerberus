@@ -122,6 +122,14 @@ var (
 		},
 		[]string{StatusCode, WithDownstreamDeadlineLabel},
 	)
+
+	upstreamAuthFailedRequests = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "upstream_auth_failed_requests_total",
+			Help: "Total number of failed UpstreamAuth requests",
+		},
+		[]string{"with_downstream_deadline"},
+	)
 )
 
 func init() {
@@ -138,6 +146,7 @@ func init() {
 		fetchObjectListLatency,
 		serviceUpstreamAuthCalls,
 		upstreamAuthRequestDuration,
+		upstreamAuthFailedRequests,
 	)
 }
 

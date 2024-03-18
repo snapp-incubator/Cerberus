@@ -1229,13 +1229,13 @@ func TestCheck_UpstreamAuthFailed(t *testing.T) {
 		Transport: &MockTransport{
 			DoFunc: func(req *http.Request) (*http.Response, error) {
 				return &http.Response{
-						StatusCode: http.StatusInternalServerError,
+						StatusCode: http.StatusRequestTimeout,
 						Body:       io.NopCloser(strings.NewReader("Internal Server Error")),
 						Header:     make(http.Header),
 					}, &url.Error{
 						Op:  "Get",
 						URL: "http://fake-upstream-service/authenticate",
-						Err: errors.New("timeout"),
+						Err: errors.New("Internal Server Error"),
 					}
 			},
 		},
@@ -1280,4 +1280,62 @@ func TestCheck_UpstreamAuthFailed(t *testing.T) {
 	assert.NotNil(t, finalResponse, "Expected a non-nil response")
 	assert.False(t, finalResponse.Allow, "Expected the request to be denied due to upstream authentication failed")
 	assert.Equal(t, "upstream-auth-failed", finalResponse.Response.Header.Get("X-Cerberus-Reason"), "Expected reason to indicate upstream authentication failed")
+}
+
+func TestCheck_UpstreamAuthTimeout(t *testing.T) {
+	mockHTTPClient := &http.Client{
+		Transport: &MockTransport{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				return &http.Response{
+						StatusCode: http.StatusRequestTimeout,
+						Body:       io.NopCloser(strings.NewReader("Request Timeout")),
+						Header:     make(http.Header),
+					}, &url.Error{
+						Op:  "Get",
+						URL: "http://fake-upstream-service/authenticate",
+						Err: &innerError{timeout: true},
+					}
+			},
+		},
+	}
+
+	authenticator := &Authenticator{
+		httpClient:        mockHTTPClient,
+		accessTokensCache: &AccessTokensCache{},
+		webservicesCache:  &WebservicesCache{},
+	}
+
+	services := prepareWebservices(1)
+	tokens := prepareAccessTokens(1)
+
+	tokenEntry := AccessTokensCacheEntry{
+		AccessToken: tokens[0],
+		allowedWebservicesCache: map[string]struct{}{
+			"default/" + services[0].Name: {},
+		},
+	}
+	(*authenticator.accessTokensCache)["valid-token"] = tokenEntry
+
+	webserviceKey := fmt.Sprintf("%s/%s", "default", services[0].Name)
+	(*authenticator.webservicesCache)[webserviceKey] = WebservicesCacheEntry{WebService: services[0]}
+
+	headers := http.Header{}
+	headers.Set(string(CerberusHeaderAccessToken), "valid-token")
+
+	request := &Request{
+		Context: map[string]string{
+			"webservice": services[0].Name,
+			"namespace":  "default",
+		},
+		Request: http.Request{
+			Header: headers,
+		},
+	}
+
+	finalResponse, err := authenticator.Check(context.Background(), request)
+
+	assert.Error(t, err, "Error should occur")
+	assert.NotNil(t, finalResponse, "Expected a non-nil response")
+	assert.False(t, finalResponse.Allow, "Expected the request to be denied due to upstream authentication timeout")
+	assert.Equal(t, "upstream-auth-timeout", finalResponse.Response.Header.Get("X-Cerberus-Reason"), "Expected reason to indicate upstream authentication timeout")
 }

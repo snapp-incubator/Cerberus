@@ -1224,7 +1224,7 @@ func TestCheck_UpstreamAuthUnauthorized(t *testing.T) {
 	assert.Equal(t, "unauthorized", finalResponse.Response.Header.Get("X-Cerberus-Reason"), "Expected reason to indicate unauthorized")
 }
 
-func TestCheck_UpstreamAuthTimeout(t *testing.T) {
+func TestCheck_UpstreamAuthFailed(t *testing.T) {
 	mockHTTPClient := &http.Client{
 		Transport: &MockTransport{
 			DoFunc: func(req *http.Request) (*http.Response, error) {

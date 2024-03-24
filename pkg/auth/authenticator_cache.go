@@ -102,11 +102,11 @@ func retrieveObjects(
 	l client.ObjectList,
 	c client.Client,
 	ctx context.Context,
-	listOpts ...*client.ListOptions,
+	listOpts ...client.ListOption,
 ) error {
 	t := time.Now()
 	metricsLabel := reflect.TypeOf(l).Elem().String()
-	err := c.List(ctx, l)
+	err := c.List(ctx, l, listOpts...)
 	fetchObjectListLatency.With(AddKindLabel(nil, metricsLabel)).Observe(time.Since(t).Seconds())
 	return err
 }

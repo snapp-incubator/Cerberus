@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/asaskevich/govalidator"
 	"github.com/go-logr/logr"
 	"github.com/snapp-incubator/Cerberus/api/v1alpha1"
+	"github.com/snapp-incubator/Cerberus/internal/settings"
 	"github.com/snapp-incubator/Cerberus/internal/tracing"
 	"go.opentelemetry.io/otel/attribute"
 	otelcodes "go.opentelemetry.io/otel/codes"
@@ -25,6 +27,7 @@ const downstreamDeadlineOffset = 50 * time.Microsecond
 // Authenticator can generate cache from Kubernetes API server
 // and it implements envoy.CheckRequest interface
 type Authenticator struct {
+	settings   settings.Settings
 	logger     logr.Logger
 	httpClient *http.Client
 
@@ -145,6 +148,17 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (finalRespo
 	start_time := time.Now()
 	wsvc, ns, reason := readRequestContext(request)
 
+	// access logs
+	defer func() {
+		if a.settings.AccessLogLevel == settings.LogLevelDebug {
+			a.logger.Info("check request result",
+				"request", fmt.Sprintf("%#v", *request),
+				"response", fmt.Sprintf("%#v", *finalResponse),
+				"duration", fmt.Sprintf("%vms", time.Since(start_time).Milliseconds()),
+			)
+		}
+	}()
+
 	// generate opentelemetry span with given parameters
 	parentCtx := tracing.ReadParentSpanFromRequest(ctx, request.Request)
 	ctx, span := tracing.StartSpan(parentCtx, "CheckFunction",
@@ -228,12 +242,13 @@ func defineValidators() []AuthenticationValidation {
 
 // NewAuthenticator creates new Authenticator object with given logger.
 // currently it's not returning any error
-func NewAuthenticator(logger logr.Logger) *Authenticator {
+func NewAuthenticator(logger logr.Logger, st settings.Settings) *Authenticator {
 	a := Authenticator{
 		logger:     logger,
 		httpClient: &http.Client{},
 	}
 	a.validators = defineValidators()
+	a.settings = st
 	return &a
 }
 

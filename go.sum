@@ -156,6 +156,16 @@ github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9de
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.3.5/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1Zlc8k=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
+go.opentelemetry.io/contrib/propagators/autoprop v0.49.0 h1:Jbr/9/jv1QpINge/fvJD4kUkW9/TqRNWU7H2GSK/Vb8=
+go.opentelemetry.io/contrib/propagators/autoprop v0.49.0/go.mod h1:aZTdrjEnMOr6ODgjCQ955njFMLRDo1IJdTNS+agSPjA=
+go.opentelemetry.io/contrib/propagators/aws v1.24.0 h1:cuwQmy9nGJi99fbwUfZSygCL3d347ddnSCWRuiVjhJ8=
+go.opentelemetry.io/contrib/propagators/aws v1.24.0/go.mod h1:7HbFx8Hiiuce72QONjbOtU+3QU+Scs9VOHZIrdmi1rw=
+go.opentelemetry.io/contrib/propagators/b3 v1.24.0 h1:n4xwCdTx3pZqZs2CjS/CUZAs03y3dZcGhC/FepKtEUY=
+go.opentelemetry.io/contrib/propagators/b3 v1.24.0/go.mod h1:k5wRxKRU2uXx2F8uNJ4TaonuEO/V7/5xoz7kdsDACT8=
+go.opentelemetry.io/contrib/propagators/jaeger v1.24.0 h1:CKtIfwSgDvJmaWsZROcHzONZgmQdMYn9mVYWypOWT5o=
+go.opentelemetry.io/contrib/propagators/jaeger v1.24.0/go.mod h1:Q5JA/Cfdy/ta+5VeEhrMJRWGyS6UNRwFbl+yS3W1h5I=
+go.opentelemetry.io/contrib/propagators/ot v1.24.0 h1:6lf4HoYefKDOTUSCatwkpzliUYihAvlN0omfpOn5IDs=
+go.opentelemetry.io/contrib/propagators/ot v1.24.0/go.mod h1:A406hNQ7A0EWsOFzWI1p53YaYQXe12C9f6wGHUxfh0g=
 go.opentelemetry.io/otel v1.24.0 h1:0LAOdjNmQeSTzGBzduGe/rU4tZhMwL5rWgtp9Ku5Jfo=
 go.opentelemetry.io/otel v1.24.0/go.mod h1:W7b9Ozg4nkF5tWI5zsXkaKKDjdVjpD4oAt9Qi/MArHo=
 go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.24.0 h1:t6wl9SPayj+c7lEIFgm4ooDBZVb01IhLB4InpomhRw8=

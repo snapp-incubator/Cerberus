@@ -47,10 +47,11 @@ func (a *authV2) Check(ctx context.Context, check *CheckRequestV2) (*CheckRespon
 	reason := CerberusReason(response.Response.Header.Get(CerberusHeaderReasonHeader))
 	labels := AddReasonLabel(nil, reason)
 	labels = AddUpstreamAuthLabel(labels, request.Context[HasUpstreamAuth])
-	labels = AddWebserviceLabel(labels, string(CerberusHeaderWebservice))
 	labels[CheckRequestVersionLabel] = MetricsCheckRequestVersion2
-	reqCount.With(labels).Inc()
 	reqLatency.With(labels).Observe(time.Since(reqStartTime).Seconds())
+	labels = AddWebserviceLabel(labels, string(CerberusHeaderWebservice))
+	reqCount.With(labels).Inc()
+
 
 	return final_response, nil
 }
@@ -74,10 +75,10 @@ func (a *authV3) Check(ctx context.Context, check *CheckRequestV3) (*CheckRespon
 	reason := CerberusReason(response.Response.Header.Get(CerberusHeaderReasonHeader))
 	labels := AddReasonLabel(nil, reason)
 	labels = AddUpstreamAuthLabel(labels, request.Context[HasUpstreamAuth])
-	labels = AddWebserviceLabel(labels, string(CerberusHeaderWebservice))
 	labels[CheckRequestVersionLabel] = MetricsCheckRequestVersion3
-	reqCount.With(labels).Inc()
 	reqLatency.With(labels).Observe(time.Since(reqStartTime).Seconds())
+	labels = AddWebserviceLabel(labels, string(CerberusHeaderWebservice))
+	reqCount.With(labels).Inc()
 
 	return final_response, nil
 }

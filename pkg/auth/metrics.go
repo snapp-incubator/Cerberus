@@ -13,6 +13,7 @@ const (
 	HasUpstreamAuth             = "upstream_auth_enabled"
 	ObjectKindLabel             = "kind"
 	WithDownstreamDeadlineLabel = "with_downstream_deadline"
+	WebserviceLabel 			= "webservice" 
 
 	MetricsKindSecret                  = "secret"
 	MetricsKindWebservice              = "webservice"
@@ -33,7 +34,7 @@ var (
 			Name: "check_request_count",
 			Help: "CheckRequest count",
 		},
-		[]string{CerberusReasonLabel, CheckRequestVersionLabel, HasUpstreamAuth},
+		[]string{CerberusReasonLabel, CheckRequestVersionLabel, HasUpstreamAuth, WebserviceLabel},
 	)
 
 	reqLatency = prometheus.NewHistogramVec(
@@ -42,7 +43,7 @@ var (
 			Help:    "CheckRequest durations (response times)",
 			Buckets: DurationBuckets,
 		},
-		[]string{CerberusReasonLabel, CheckRequestVersionLabel, HasUpstreamAuth},
+		[]string{CerberusReasonLabel, CheckRequestVersionLabel, HasUpstreamAuth, WebserviceLabel},
 	)
 
 	cacheUpdateCount = prometheus.NewCounter(
@@ -128,7 +129,7 @@ var (
 			Name: "upstream_auth_failed_requests_total",
 			Help: "Total number of failed UpstreamAuth requests",
 		},
-		[]string{"with_downstream_deadline"},
+		[]string{WithDownstreamDeadlineLabel},
 	)
 )
 
@@ -149,7 +150,7 @@ func init() {
 		upstreamAuthFailedRequests,
 	)
 }
-
+///server
 func AddReasonLabel(labels prometheus.Labels, reason CerberusReason) prometheus.Labels {
 	if labels == nil {
 		labels = prometheus.Labels{}
@@ -157,7 +158,7 @@ func AddReasonLabel(labels prometheus.Labels, reason CerberusReason) prometheus.
 	labels[CerberusReasonLabel] = string(reason)
 	return labels
 }
-
+///auth-cache
 func AddKindLabel(labels prometheus.Labels, kind string) prometheus.Labels {
 	if labels == nil {
 		labels = prometheus.Labels{}
@@ -165,7 +166,7 @@ func AddKindLabel(labels prometheus.Labels, kind string) prometheus.Labels {
 	labels[ObjectKindLabel] = kind
 	return labels
 }
-
+///auth
 func AddStatusLabel(labels prometheus.Labels, status int) prometheus.Labels {
 	if labels == nil {
 		labels = prometheus.Labels{}
@@ -173,7 +174,7 @@ func AddStatusLabel(labels prometheus.Labels, status int) prometheus.Labels {
 	labels[StatusCode] = strconv.Itoa(status)
 	return labels
 }
-
+///server
 func AddUpstreamAuthLabel(labels prometheus.Labels, hasUpstreamAuth string) prometheus.Labels {
 	if labels == nil {
 		labels = prometheus.Labels{}
@@ -181,7 +182,7 @@ func AddUpstreamAuthLabel(labels prometheus.Labels, hasUpstreamAuth string) prom
 	labels[HasUpstreamAuth] = hasUpstreamAuth
 	return labels
 }
-
+//auth
 func AddWithDownstreamDeadlineLabel(labels prometheus.Labels, hasDeadline bool) prometheus.Labels {
 	if labels == nil {
 		labels = prometheus.Labels{}
@@ -192,4 +193,12 @@ func AddWithDownstreamDeadlineLabel(labels prometheus.Labels, hasDeadline bool) 
 		labels[WithDownstreamDeadlineLabel] = "false"
 	}
 	return labels
+}
+///server
+func AddWebserviceLabel(labels prometheus.Labels, wsvc string) prometheus.Labels {
+    if labels == nil {
+        labels = prometheus.Labels{}
+    }
+    labels[WebserviceLabel] = wsvc
+    return labels
 }

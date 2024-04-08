@@ -13,6 +13,7 @@ const (
 	HasUpstreamAuth             = "upstream_auth_enabled"
 	ObjectKindLabel             = "kind"
 	WithDownstreamDeadlineLabel = "with_downstream_deadline"
+	WebserviceLabel 			= "webservice" 
 
 	MetricsKindSecret                  = "secret"
 	MetricsKindWebservice              = "webservice"
@@ -33,7 +34,7 @@ var (
 			Name: "check_request_count",
 			Help: "CheckRequest count",
 		},
-		[]string{CerberusReasonLabel, CheckRequestVersionLabel, HasUpstreamAuth},
+		[]string{CerberusReasonLabel, CheckRequestVersionLabel, HasUpstreamAuth, WebserviceLabel},
 	)
 
 	reqLatency = prometheus.NewHistogramVec(
@@ -128,7 +129,7 @@ var (
 			Name: "upstream_auth_failed_requests_total",
 			Help: "Total number of failed UpstreamAuth requests",
 		},
-		[]string{"with_downstream_deadline"},
+		[]string{WithDownstreamDeadlineLabel},
 	)
 )
 
@@ -192,4 +193,12 @@ func AddWithDownstreamDeadlineLabel(labels prometheus.Labels, hasDeadline bool) 
 		labels[WithDownstreamDeadlineLabel] = "false"
 	}
 	return labels
+}
+
+func AddWebserviceLabel(labels prometheus.Labels, wsvc string) prometheus.Labels {
+    if labels == nil {
+        labels = prometheus.Labels{}
+    }
+    labels[WebserviceLabel] = wsvc
+    return labels
 }

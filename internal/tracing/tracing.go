@@ -17,6 +17,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/contrib/propagators/autoprop"
+	"go.opentelemetry.io/contrib/propagators/jaeger"
 
 )
 
@@ -65,7 +66,13 @@ func SetTracingProvider(provider string, samplingRatio float64, timeout float64)
     )
     cerberusTracer = tp.Tracer(CerberusTracerName)
 
-    otel.SetTextMapPropagator(autoprop.NewTextMapPropagator())
+    otel.SetTextMapPropagator(
+		autoprop.NewTextMapPropagator(
+			propagation.TraceContext{},
+			propagation.Baggage{},
+			jaeger.Jaeger{},
+			),
+		)
 
     return nil
 }

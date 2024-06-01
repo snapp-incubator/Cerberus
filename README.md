@@ -58,9 +58,9 @@ make undeploy
 
 ### How it works
 
-- **Contour** is a modern Kubernetes ingress controller that facilitates the routing of external traffic to internal services. It plays a crucial role in managing ingress traffic and ensuring efficient communication within a microservices environment. It employs Envoy as its backend.
+- [**Contour**](https://projectcontour.io/) is a modern Kubernetes ingress controller that facilitates the routing of external traffic to internal services. It plays a crucial role in managing ingress traffic and ensuring efficient communication within a microservices environment. It employs Envoy as its backend.
 Contour provides a wide range of features, including external authorization. This feature enables the delegation of authorization decisions to an external service, proving to be more flexible and scalable compared to relying solely on Contour's built-in authorization methods. An external authorization server, in this context, is a server implementing the Envoy external authorization gRPC protocol. Notably, Contour seamlessly supports any server that adopts this protocol, fostering adaptability and choice in implementing robust authorization solutions.
-- **Envoy** is a high-performance proxy designed for microservices architectures. It functions as the data plane for Contour, handling communication between services and providing features like load balancing, service discovery, and security.
+- [**Envoy**](https://www.envoyproxy.io/) is a high-performance proxy designed for microservices architectures. It functions as the data plane for Contour, handling communication between services and providing features like load balancing, service discovery, and security.
 
 Cerberus acts as a robust authorization server, complementing the capabilities of Contour and Envoy. By implementing the auth gRPC interface of Envoy, Cerberus seamlessly integrates with the microservices ecosystem, ensuring secure and controlled access to services. It's a part of External Authorization ability described in Contour Project.
 

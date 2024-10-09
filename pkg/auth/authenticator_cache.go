@@ -12,6 +12,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// DefaultAccessTokenAnnotation is used to set a default AccessToken
+// webservice when there is no access token provided in request headers
+// It is used when you want to ignore access token on a webservice but
+// you need to have UpstreamAuth and Authentication headers on request
+// NOTE: you need to set RAW access token in annotation, not it's name or ref
+const DefaultAccessTokenAnnotation = "cerberus.snappcloud.io/default-access-token"
+
+// NoDefaultAccessToken is used to identify when no default access token
+// is set on websevice (thus, Cerberus will perform it's normal behavior)
+const NoDefaultAccessToken = ""
+
 // AccessTokensCache is where Authenticator holds its authentication data,
 // under the hood it is a Map from RawTokens to some information about
 // AccessToken, see AccessCacheEntry for more information
@@ -38,6 +49,7 @@ type AllowedWebservicesCache map[string]struct{}
 type WebservicesCacheEntry struct {
 	v1alpha1.WebService
 	allowedNamespacesCache AllowedNamespacesCache
+	defaultAccessToken     string
 }
 
 // AllowedNamespacesCache will hold all namespaces that are allowed to call this webservice
@@ -126,9 +138,15 @@ func (a *Authenticator) buildNewWebservicesCache(
 			)
 			continue
 		}
+
+		defaultAccessToken := NoDefaultAccessToken
+		if v, ok := webservice.Annotations[DefaultAccessTokenAnnotation]; ok {
+			defaultAccessToken = v
+		}
 		newWebservicesCache[webservice.LocalName()] = WebservicesCacheEntry{
 			WebService:             webservice,
 			allowedNamespacesCache: make(AllowedNamespacesCache),
+			defaultAccessToken:     defaultAccessToken,
 		}
 	}
 	webserviceCacheEntries.Set(float64(len(newWebservicesCache)))

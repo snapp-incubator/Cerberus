@@ -1,6 +1,5 @@
 resources:
   - manager.yaml
-  - service.yaml
   - certificate.yaml
   - issuer.yaml
 

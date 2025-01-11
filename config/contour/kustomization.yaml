@@ -1,2 +1,3 @@
 resources:
-  - extention.yaml
+  - extension.yaml
+  - service.yaml

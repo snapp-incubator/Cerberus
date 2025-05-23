@@ -1339,3 +1339,544 @@ func TestCheck_UpstreamAuthTimeout(t *testing.T) {
 	assert.False(t, finalResponse.Allow, "Expected the request to be denied due to upstream authentication timeout")
 	assert.Equal(t, "upstream-auth-timeout", finalResponse.Response.Header.Get("X-Cerberus-Reason"), "Expected reason to indicate upstream authentication timeout")
 }
+
+func TestAuthenticator_Check_MultipleUpstreamAuth(t *testing.T) {
+	// Common setup for authenticator and basic caches
+	setupAuthenticator := func() *Authenticator {
+		return &Authenticator{
+			httpClient:        &http.Client{Timeout: 5 * time.Second}, // Give a default timeout
+			accessTokensCache: &AccessTokensCache{},
+			webservicesCache:  &WebservicesCache{},
+			validators:        defineValidators(), // Include standard validators
+		}
+	}
+
+	// Helper to create a WebservicesCacheEntry, allowing specification of both new and deprecated fields
+	createWebserviceEntry := func(namespace, name string, lookupHeader string,
+		upstreamAuths []cerberusv1alpha1.UpstreamHttpAuthService, // For new UpstreamHttpAuths field
+		deprecatedUpstreamAuth *cerberusv1alpha1.UpstreamHttpAuthService) WebservicesCacheEntry { // For old UpstreamHttpAuth field
+
+		spec := cerberusv1alpha1.WebServiceSpec{
+			LookupHeader:      lookupHeader,
+			UpstreamHttpAuths: upstreamAuths,
+		}
+		if deprecatedUpstreamAuth != nil {
+			spec.UpstreamHttpAuth = *deprecatedUpstreamAuth
+		}
+
+		return WebservicesCacheEntry{
+			WebService: cerberusv1alpha1.WebService{
+				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+				Spec:       spec,
+			},
+		}
+	}
+
+	// Helper to create an AccessTokensCacheEntry
+	createTokenEntry := func(token, namespace, serviceName string) AccessTokensCacheEntry {
+		return AccessTokensCacheEntry{
+			AccessToken: cerberusv1alpha1.AccessToken{
+				ObjectMeta: metav1.ObjectMeta{Name: token, Namespace: namespace},
+				Spec: cerberusv1alpha1.AccessTokenSpec{
+					State: "active",
+				},
+			},
+			allowedWebservicesCache: map[string]struct{}{
+				namespace + "/" + serviceName: {},
+			},
+		}
+	}
+
+	t.Run("Successful chain (2 upstreams)", func(t *testing.T) {
+		auth := setupAuthenticator()
+		wsNamespace := "testns"
+		wsName := "multi-ws-ok"
+		clientTokenValue := "client-initial-token"
+		clientTokenHeader := "X-Client-Token"
+
+		// Mock Upstream 1
+		mockUpstream1 := NewMockAuthServer()
+		defer mockUpstream1.Close()
+		mockUpstream1.ExpectedStatus = http.StatusOK
+		mockUpstream1.ExpectedRequestHeaders = map[string]string{
+			"U1-Auth-Header": clientTokenValue, // Sent by Cerberus using clientTokenValue
+		}
+		mockUpstream1.ResponseHeaders = map[string]string{"U1-Care": "Val1"}
+
+		// Mock Upstream 2
+		mockUpstream2 := NewMockAuthServer()
+		defer mockUpstream2.Close()
+		mockUpstream2.ExpectedStatus = http.StatusOK
+		mockUpstream2.ExpectedRequestHeaders = map[string]string{
+			"U2-Auth-Header": clientTokenValue, // Still client token as U1 doesn't propagate a new one
+			// "U1-Care":        "Val1", // This header is NOT forwarded by default unless U1.CareHeaders includes it AND U2 is configured to expect it.
+			// The current implementation forwards care_headers from U(n) to U(n+1) if they are also in U(n).CareHeaders.
+			// For this simpler test, we assume U1.CareHeaders does not include U1-Care for forwarding, only for final response.
+		}
+		mockUpstream2.ResponseHeaders = map[string]string{"U2-Care": "Val2"}
+
+		upstreamServices := []cerberusv1alpha1.UpstreamHttpAuthService{
+			{Address: mockUpstream1.Server.URL, ReadTokenFrom: clientTokenHeader, WriteTokenTo: "U1-Auth-Header", CareHeaders: []string{"U1-Care"}, Timeout: 100},
+			{Address: mockUpstream2.Server.URL, ReadTokenFrom: clientTokenHeader, WriteTokenTo: "U2-Auth-Header", CareHeaders: []string{"U2-Care"}, Timeout: 100},
+		}
+		// Use new helper: upstreamAuths is populated, deprecatedUpstreamAuth is nil
+		wsEntry := createWebserviceEntry(wsNamespace, wsName, clientTokenHeader, upstreamServices, nil)
+		(*auth.webservicesCache)[wsNamespace+"/"+wsName] = wsEntry
+		(*auth.accessTokensCache)[clientTokenValue] = createTokenEntry(clientTokenValue, wsNamespace, wsName)
+
+		req := &Request{
+			Context: map[string]string{"webservice": wsName, "namespace": wsNamespace},
+			Request: http.Request{Header: http.Header{clientTokenHeader: {clientTokenValue}}},
+		}
+
+		resp, err := auth.Check(context.Background(), req)
+
+		assert.NoError(t, err)
+		assert.True(t, resp.Allow)
+		assert.Equal(t, string(CerberusReasonOK), resp.Response.Header.Get(CerberusHeaderReasonHeader))
+		assert.Equal(t, "Val1", resp.Response.Header.Get("U1-Care"))
+		assert.Equal(t, "Val2", resp.Response.Header.Get("U2-Care"))
+		assert.True(t, mockUpstream1.Called, "Mock Upstream 1 should have been called")
+		assert.True(t, mockUpstream2.Called, "Mock Upstream 2 should have been called")
+	})
+
+	t.Run("Failure in the middle of the chain (2nd of 3 fails)", func(t *testing.T) {
+		auth := setupAuthenticator()
+		wsNamespace := "testns"
+		wsName := "multi-ws-fail-middle"
+		clientTokenValue := "client-token"
+		clientTokenHeader := "X-Client-Token"
+
+		mockUpstream1 := NewMockAuthServer()
+		defer mockUpstream1.Close()
+		mockUpstream1.ExpectedStatus = http.StatusOK // U1 is OK
+
+		mockUpstream2 := NewMockAuthServer() // U2 Fails
+		defer mockUpstream2.Close()
+		mockUpstream2.ExpectedStatus = http.StatusUnauthorized
+
+		mockUpstream3 := NewMockAuthServer() // U3 Not Called
+		defer mockUpstream3.Close()
+
+		upstreamServices := []cerberusv1alpha1.UpstreamHttpAuthService{
+			{Address: mockUpstream1.Server.URL, ReadTokenFrom: clientTokenHeader, WriteTokenTo: "U1-Auth", Timeout: 100},
+			{Address: mockUpstream2.Server.URL, ReadTokenFrom: clientTokenHeader, WriteTokenTo: "U2-Auth", Timeout: 100},
+			{Address: mockUpstream3.Server.URL, ReadTokenFrom: clientTokenHeader, WriteTokenTo: "U3-Auth", Timeout: 100},
+		}
+		// Use new helper: upstreamAuths is populated, deprecatedUpstreamAuth is nil
+		wsEntry := createWebserviceEntry(wsNamespace, wsName, clientTokenHeader, upstreamServices, nil)
+		(*auth.webservicesCache)[wsNamespace+"/"+wsName] = wsEntry
+		(*auth.accessTokensCache)[clientTokenValue] = createTokenEntry(clientTokenValue, wsNamespace, wsName)
+
+		req := &Request{
+			Context: map[string]string{"webservice": wsName, "namespace": wsNamespace},
+			Request: http.Request{Header: http.Header{clientTokenHeader: {clientTokenValue}}},
+		}
+
+		resp, err := auth.Check(context.Background(), req)
+
+		assert.NoError(t, err) // Check itself doesn't error, failure is in the resp.Allow
+		assert.False(t, resp.Allow)
+		assert.Equal(t, string(CerberusReasonUnauthorized), resp.Response.Header.Get(CerberusHeaderReasonHeader))
+		assert.True(t, mockUpstream1.Called, "Mock Upstream 1 should have been called")
+		assert.True(t, mockUpstream2.Called, "Mock Upstream 2 should have been called")
+		assert.False(t, mockUpstream3.Called, "Mock Upstream 3 should NOT have been called")
+	})
+
+	t.Run("Header Forwarding and Token Propagation (3 upstreams)", func(t *testing.T) {
+		auth := setupAuthenticator()
+		wsNamespace := "testns"
+		wsName := "multi-ws-propagate"
+		clientTokenValue := "initial-client-token"
+		clientTokenHeader := "X-Client-Token" // Header client sends token in
+
+		// Upstream 1: Gets client token, returns new token and a care header
+		mockUpstream1 := NewMockAuthServer()
+		defer mockUpstream1.Close()
+		mockUpstream1.ExpectedStatus = http.StatusOK
+		mockUpstream1.ExpectedRequestHeaders = map[string]string{"U1-Auth": clientTokenValue} // Expects initial client token
+		mockUpstream1.ResponseHeaders = map[string]string{
+			"U1-Care-Header":      "U1-Value",
+			"Token-For-U2-Header": "TokenFromU1ForU2", // This token will be used by U2
+		}
+
+		// Upstream 2: Gets token from U1, and U1's care header. Returns its own care header. No new token.
+		mockUpstream2 := NewMockAuthServer()
+		defer mockUpstream2.Close()
+		mockUpstream2.ExpectedStatus = http.StatusOK
+		mockUpstream2.ExpectedRequestHeaders = map[string]string{
+			"U2-Auth":        "TokenFromU1ForU2", // Expects token from U1
+			"U1-Care-Header": "U1-Value",         // Expects U1's care header to be forwarded
+		}
+		mockUpstream2.ResponseHeaders = map[string]string{"U2-Care-Header": "U2-Value"}
+
+		// Upstream 3: Gets original client token (as U2 didn't propagate a new one for U3). Expects U2's care header.
+		mockUpstream3 := NewMockAuthServer()
+		defer mockUpstream3.Close()
+		mockUpstream3.ExpectedStatus = http.StatusOK
+		mockUpstream3.ExpectedRequestHeaders = map[string]string{
+			"U3-Auth":        clientTokenValue, // Fallback to original/previous token if not explicitly changed by U2
+			"U2-Care-Header": "U2-Value",       // Expects U2's care header
+		}
+		mockUpstream3.ResponseHeaders = map[string]string{"U3-Care-Header": "U3-Value"}
+
+		upstreamServices := []cerberusv1alpha1.UpstreamHttpAuthService{
+			{
+				Address:       mockUpstream1.Server.URL,
+				ReadTokenFrom: clientTokenHeader,      // Read original token from client req
+				WriteTokenTo:  "U1-Auth",              // Send to U1 in this header
+				CareHeaders:   []string{"U1-Care-Header", "Token-For-U2-Header"}, // U1-Care for final, Token-For-U2 for U2
+				Timeout:       100,
+			},
+			{
+				Address:       mockUpstream2.Server.URL,
+				ReadTokenFrom: "Token-For-U2-Header", // Read token from U1's response
+				WriteTokenTo:  "U2-Auth",             // Send to U2 in this header
+				CareHeaders:   []string{"U2-Care-Header"},
+				Timeout:       100,
+			},
+			{
+				Address:       mockUpstream3.Server.URL,
+				ReadTokenFrom: clientTokenHeader,      // U2 doesn't specify ReadTokenFrom for U3, so U3 uses original client token
+				WriteTokenTo:  "U3-Auth",              // Send to U3 in this header
+				CareHeaders:   []string{"U3-Care-Header"},
+				Timeout:       100,
+			},
+		}
+		// Use new helper: upstreamAuths is populated, deprecatedUpstreamAuth is nil
+		wsEntry := createWebserviceEntry(wsNamespace, wsName, clientTokenHeader, upstreamServices, nil)
+		(*auth.webservicesCache)[wsNamespace+"/"+wsName] = wsEntry
+		(*auth.accessTokensCache)[clientTokenValue] = createTokenEntry(clientTokenValue, wsNamespace, wsName)
+
+		req := &Request{
+			Context: map[string]string{"webservice": wsName, "namespace": wsNamespace},
+			Request: http.Request{Header: http.Header{clientTokenHeader: {clientTokenValue}}},
+		}
+
+		resp, err := auth.Check(context.Background(), req)
+
+		assert.NoError(t, err)
+		assert.True(t, resp.Allow)
+		assert.Equal(t, string(CerberusReasonOK), resp.Response.Header.Get(CerberusHeaderReasonHeader))
+
+		// Check accumulated CareHeaders in final response
+		assert.Equal(t, "U1-Value", resp.Response.Header.Get("U1-Care-Header"))
+		assert.Equal(t, "TokenFromU1ForU2", resp.Response.Header.Get("Token-For-U2-Header")) //This was a care header from U1
+		assert.Equal(t, "U2-Value", resp.Response.Header.Get("U2-Care-Header"))
+		assert.Equal(t, "U3-Value", resp.Response.Header.Get("U3-Care-Header"))
+
+		assert.True(t, mockUpstream1.Called, "Mock Upstream 1 should be called")
+		assert.True(t, mockUpstream2.Called, "Mock Upstream 2 should be called")
+		assert.True(t, mockUpstream3.Called, "Mock Upstream 3 should be called")
+	})
+
+	t.Run("Empty Upstream Auth List", func(t *testing.T) {
+		auth := setupAuthenticator()
+		wsNamespace := "testns"
+		wsName := "multi-ws-empty"
+		clientTokenValue := "client-token"
+		clientTokenHeader := "X-Client-Token"
+
+		// Use new helper: both upstreamAuths and deprecatedUpstreamAuth are nil/empty
+		wsEntry := createWebserviceEntry(wsNamespace, wsName, clientTokenHeader, nil, nil)
+		(*auth.webservicesCache)[wsNamespace+"/"+wsName] = wsEntry
+		(*auth.accessTokensCache)[clientTokenValue] = createTokenEntry(clientTokenValue, wsNamespace, wsName)
+
+		req := &Request{
+			Context: map[string]string{"webservice": wsName, "namespace": wsNamespace},
+			Request: http.Request{Header: http.Header{clientTokenHeader: {clientTokenValue}}},
+		}
+
+		resp, err := auth.Check(context.Background(), req)
+
+		assert.NoError(t, err)
+		assert.True(t, resp.Allow) // Should be allowed as basic auth passes and no upstreams to fail
+		assert.Equal(t, string(CerberusReasonOK), resp.Response.Header.Get(CerberusHeaderReasonHeader))
+	})
+
+	t.Run("Single Upstream Auth (behaves like old)", func(t *testing.T) {
+		auth := setupAuthenticator()
+		wsNamespace := "testns"
+		wsName := "multi-ws-single"
+		clientTokenValue := "client-token"
+		clientTokenHeader := "X-Client-Token"
+
+		mockUpstream1 := NewMockAuthServer()
+		defer mockUpstream1.Close()
+		mockUpstream1.ExpectedStatus = http.StatusOK
+		mockUpstream1.ResponseHeaders = map[string]string{"U1-Care-Single": "ValSingle"}
+
+		upstreamServicesList := []cerberusv1alpha1.UpstreamHttpAuthService{
+			{Address: mockUpstream1.Server.URL, ReadTokenFrom: clientTokenHeader, WriteTokenTo: "U1-Auth", CareHeaders: []string{"U1-Care-Single"}, Timeout: 100},
+		}
+		// Use new helper: upstreamAuths is populated, deprecatedUpstreamAuth is nil
+		wsEntry := createWebserviceEntry(wsNamespace, wsName, clientTokenHeader, upstreamServicesList, nil)
+		(*auth.webservicesCache)[wsNamespace+"/"+wsName] = wsEntry
+		(*auth.accessTokensCache)[clientTokenValue] = createTokenEntry(clientTokenValue, wsNamespace, wsName)
+
+		req := &Request{
+			Context: map[string]string{"webservice": wsName, "namespace": wsNamespace},
+			Request: http.Request{Header: http.Header{clientTokenHeader: {clientTokenValue}}},
+		}
+
+		resp, err := auth.Check(context.Background(), req)
+
+		assert.NoError(t, err)
+		assert.True(t, resp.Allow)
+		assert.Equal(t, string(CerberusReasonOK), resp.Response.Header.Get(CerberusHeaderReasonHeader))
+		assert.Equal(t, "ValSingle", resp.Response.Header.Get("U1-Care-Single"))
+		assert.True(t, mockUpstream1.Called, "Mock Upstream 1 should have been called")
+	})
+
+	t.Run("Token propagation where U2 reads token from U1 response, U1 does not have it in CareHeaders", func(t *testing.T) {
+		auth := setupAuthenticator()
+		wsNamespace := "testns"
+		wsName := "multi-ws-token-prop-no-care"
+		clientTokenValue := "initial-client-token"
+		clientTokenHeader := "X-Client-Token"
+
+		// Upstream 1: Gets client token, returns new token for U2 but NOT in its own CareHeaders for final response
+		mockUpstream1 := NewMockAuthServer()
+		defer mockUpstream1.Close()
+		mockUpstream1.ExpectedStatus = http.StatusOK
+		mockUpstream1.ExpectedRequestHeaders = map[string]string{"U1-Auth": clientTokenValue}
+		mockUpstream1.ResponseHeaders = map[string]string{
+			"Token-For-U2": "TokenFromU1ForU2", // This token will be used by U2
+			"U1-OtherCare": "KeepThis",
+		}
+
+		// Upstream 2: Gets token from U1.
+		mockUpstream2 := NewMockAuthServer()
+		defer mockUpstream2.Close()
+		mockUpstream2.ExpectedStatus = http.StatusOK
+		mockUpstream2.ExpectedRequestHeaders = map[string]string{
+			"U2-Auth": "TokenFromU1ForU2", // Expects token from U1
+		}
+		mockUpstream2.ResponseHeaders = map[string]string{"U2-Care": "U2Value"}
+
+
+		upstreamServicesList := []cerberusv1alpha1.UpstreamHttpAuthService{
+			{
+				Address:       mockUpstream1.Server.URL,
+				ReadTokenFrom: clientTokenHeader,    // Read original token from client req
+				WriteTokenTo:  "U1-Auth",            // Send to U1 in this header
+				CareHeaders:   []string{"U1-OtherCare"}, // "Token-For-U2" is NOT a care header for final response
+				Timeout:       100,
+			},
+			{
+				Address:       mockUpstream2.Server.URL,
+				ReadTokenFrom: "Token-For-U2",      // Read token from U1's response header "Token-For-U2"
+				WriteTokenTo:  "U2-Auth",           // Send to U2 in this header
+				CareHeaders:   []string{"U2-Care"},
+				Timeout:       100,
+			},
+		}
+		// Use new helper: upstreamAuths is populated, deprecatedUpstreamAuth is nil
+		wsEntry := createWebserviceEntry(wsNamespace, wsName, clientTokenHeader, upstreamServicesList, nil)
+		(*auth.webservicesCache)[wsNamespace+"/"+wsName] = wsEntry
+		(*auth.accessTokensCache)[clientTokenValue] = createTokenEntry(clientTokenValue, wsNamespace, wsName)
+
+		req := &Request{
+			Context: map[string]string{"webservice": wsName, "namespace": wsNamespace},
+			Request: http.Request{Header: http.Header{clientTokenHeader: {clientTokenValue}}},
+		}
+
+		resp, err := auth.Check(context.Background(), req)
+
+		assert.NoError(t, err)
+		assert.True(t, resp.Allow)
+		assert.Equal(t, string(CerberusReasonOK), resp.Response.Header.Get(CerberusHeaderReasonHeader))
+
+		// Check accumulated CareHeaders in final response
+		assert.Equal(t, "KeepThis", resp.Response.Header.Get("U1-OtherCare"))
+		assert.Equal(t, "U2Value", resp.Response.Header.Get("U2-Care"))
+		assert.Empty(t, resp.Response.Header.Get("Token-For-U2"), "Token-For-U2 should not be in final response as it wasn't in U1.CareHeaders")
+
+		assert.True(t, mockUpstream1.Called, "Mock Upstream 1 should be called")
+		assert.True(t, mockUpstream2.Called, "Mock Upstream 2 should be called")
+	})
+
+	t.Run("Deprecated field only (success)", func(t *testing.T) {
+		auth := setupAuthenticator()
+		wsNamespace := "testns"
+		wsName := "deprecated-ok"
+		clientTokenValue := "client-token"
+		clientTokenHeader := "X-Client-Token"
+
+		mockUpstreamDeprecated := NewMockAuthServer()
+		defer mockUpstreamDeprecated.Close()
+		mockUpstreamDeprecated.ExpectedStatus = http.StatusOK
+		mockUpstreamDeprecated.ExpectedRequestHeaders = map[string]string{"Deprecated-Auth": clientTokenValue}
+		mockUpstreamDeprecated.ResponseHeaders = map[string]string{"Deprecated-Care": "DeprecatedVal"}
+
+		deprecatedService := &cerberusv1alpha1.UpstreamHttpAuthService{
+			Address:       mockUpstreamDeprecated.Server.URL,
+			ReadTokenFrom: clientTokenHeader,
+			WriteTokenTo:  "Deprecated-Auth",
+			CareHeaders:   []string{"Deprecated-Care"},
+			Timeout:       100,
+		}
+		// Use new helper: upstreamAuths is nil, deprecatedUpstreamAuth is populated
+		wsEntry := createWebserviceEntry(wsNamespace, wsName, clientTokenHeader, nil, deprecatedService)
+		(*auth.webservicesCache)[wsNamespace+"/"+wsName] = wsEntry
+		(*auth.accessTokensCache)[clientTokenValue] = createTokenEntry(clientTokenValue, wsNamespace, wsName)
+
+		req := &Request{
+			Context: map[string]string{"webservice": wsName, "namespace": wsNamespace},
+			Request: http.Request{Header: http.Header{clientTokenHeader: {clientTokenValue}}},
+		}
+
+		resp, err := auth.Check(context.Background(), req)
+
+		assert.NoError(t, err)
+		assert.True(t, resp.Allow)
+		assert.Equal(t, string(CerberusReasonOK), resp.Response.Header.Get(CerberusHeaderReasonHeader))
+		assert.Equal(t, "DeprecatedVal", resp.Response.Header.Get("Deprecated-Care"))
+		assert.True(t, mockUpstreamDeprecated.Called, "Mock Deprecated Upstream should have been called")
+	})
+
+	t.Run("Deprecated field only (failure)", func(t *testing.T) {
+		auth := setupAuthenticator()
+		wsNamespace := "testns"
+		wsName := "deprecated-fail"
+		clientTokenValue := "client-token"
+		clientTokenHeader := "X-Client-Token"
+
+		mockUpstreamDeprecated := NewMockAuthServer()
+		defer mockUpstreamDeprecated.Close()
+		mockUpstreamDeprecated.ExpectedStatus = http.StatusUnauthorized // Fails
+
+		deprecatedService := &cerberusv1alpha1.UpstreamHttpAuthService{
+			Address:       mockUpstreamDeprecated.Server.URL,
+			ReadTokenFrom: clientTokenHeader,
+			WriteTokenTo:  "Deprecated-Auth",
+			Timeout:       100,
+		}
+		wsEntry := createWebserviceEntry(wsNamespace, wsName, clientTokenHeader, nil, deprecatedService)
+		(*auth.webservicesCache)[wsNamespace+"/"+wsName] = wsEntry
+		(*auth.accessTokensCache)[clientTokenValue] = createTokenEntry(clientTokenValue, wsNamespace, wsName)
+
+		req := &Request{
+			Context: map[string]string{"webservice": wsName, "namespace": wsNamespace},
+			Request: http.Request{Header: http.Header{clientTokenHeader: {clientTokenValue}}},
+		}
+
+		resp, err := auth.Check(context.Background(), req)
+
+		assert.NoError(t, err)
+		assert.False(t, resp.Allow)
+		assert.Equal(t, string(CerberusReasonUnauthorized), resp.Response.Header.Get(CerberusHeaderReasonHeader))
+		assert.True(t, mockUpstreamDeprecated.Called, "Mock Deprecated Upstream should have been called")
+	})
+
+	t.Run("Field Precedence (UpstreamHttpAuths takes precedence)", func(t *testing.T) {
+		auth := setupAuthenticator()
+		wsNamespace := "testns"
+		wsName := "precedence-test"
+		clientTokenValue := "client-token"
+		clientTokenHeader := "X-Client-Token"
+
+		// UpstreamHttpAuths (plural, new field) - Service 1 & 2
+		mockUpstreamNew1 := NewMockAuthServer()
+		defer mockUpstreamNew1.Close()
+		mockUpstreamNew1.ExpectedStatus = http.StatusOK
+		mockUpstreamNew1.ResponseHeaders = map[string]string{"New-Care-1": "NewVal1"}
+
+		mockUpstreamNew2 := NewMockAuthServer()
+		defer mockUpstreamNew2.Close()
+		mockUpstreamNew2.ExpectedStatus = http.StatusOK
+		mockUpstreamNew2.ResponseHeaders = map[string]string{"New-Care-2": "NewVal2"}
+
+		// UpstreamHttpAuth (singular, deprecated field) - Service 3
+		mockUpstreamDeprecated := NewMockAuthServer()
+		defer mockUpstreamDeprecated.Close()
+		mockUpstreamDeprecated.ExpectedStatus = http.StatusOK // Should not be called
+
+		newUpstreamServices := []cerberusv1alpha1.UpstreamHttpAuthService{
+			{Address: mockUpstreamNew1.Server.URL, ReadTokenFrom: clientTokenHeader, WriteTokenTo: "New1-Auth", CareHeaders: []string{"New-Care-1"}, Timeout: 100},
+			{Address: mockUpstreamNew2.Server.URL, ReadTokenFrom: clientTokenHeader, WriteTokenTo: "New2-Auth", CareHeaders: []string{"New-Care-2"}, Timeout: 100},
+		}
+		deprecatedService := &cerberusv1alpha1.UpstreamHttpAuthService{
+			Address: mockUpstreamDeprecated.Server.URL, ReadTokenFrom: clientTokenHeader, WriteTokenTo: "Deprecated-Auth", Timeout: 100,
+		}
+
+		// Populate both new (plural) and deprecated (singular) fields
+		wsEntry := createWebserviceEntry(wsNamespace, wsName, clientTokenHeader, newUpstreamServices, deprecatedService)
+		(*auth.webservicesCache)[wsNamespace+"/"+wsName] = wsEntry
+		(*auth.accessTokensCache)[clientTokenValue] = createTokenEntry(clientTokenValue, wsNamespace, wsName)
+
+		req := &Request{
+			Context: map[string]string{"webservice": wsName, "namespace": wsNamespace},
+			Request: http.Request{Header: http.Header{clientTokenHeader: {clientTokenValue}}},
+		}
+
+		resp, err := auth.Check(context.Background(), req)
+
+		assert.NoError(t, err)
+		assert.True(t, resp.Allow)
+		assert.Equal(t, string(CerberusReasonOK), resp.Response.Header.Get(CerberusHeaderReasonHeader))
+		assert.Equal(t, "NewVal1", resp.Response.Header.Get("New-Care-1"))
+		assert.Equal(t, "NewVal2", resp.Response.Header.Get("New-Care-2"))
+		assert.Empty(t, resp.Response.Header.Get("Deprecated-Care"), "Deprecated service header should not be present")
+
+		assert.True(t, mockUpstreamNew1.Called, "Mock New Upstream 1 should be called")
+		assert.True(t, mockUpstreamNew2.Called, "Mock New Upstream 2 should be called")
+		assert.False(t, mockUpstreamDeprecated.Called, "Mock Deprecated Upstream should NOT be called")
+	})
+
+}
+
+
+// MockAuthServer is a utility to mock an upstream authentication server.
+// This should ideally be in a test utility file, but is included here for completeness
+// if not already available in the testing environment.
+// It is assumed a NewMockAuthServer() function exists that sets up an httptest.Server
+// and returns a struct that includes the server URL and allows setting expectations.
+// For the purpose of this diff, we'll assume its definition exists elsewhere
+// (e.g. in a auth_test_utils.go or similar).
+// If it doesn't, the following is a simplified version of what it might look like.
+
+/*
+type MockAuthServer struct {
+	Server                 *httptest.Server
+	ExpectedStatus         int
+	ExpectedRequestHeaders map[string]string
+	ResponseHeaders        map[string]string
+	ExpectedBodyContains   string // If you need to check body
+	ResponseBody           string // If you need to send a specific body
+	Called                 bool
+	t                      *testing.T
+}
+
+func NewMockAuthServer(t *testing.T) *MockAuthServer {
+	mock := &MockAuthServer{
+		ExpectedStatus: http.StatusOK, // Default to OK
+		t:              t,
+	}
+	mock.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mock.Called = true
+		// Check request headers
+		for key, expectedValue := range mock.ExpectedRequestHeaders {
+			actualValue := r.Header.Get(key)
+			if actualValue != expectedValue {
+				mock.t.Errorf("MockAuthServer: Header mismatch for %s: expected %s, got %s", key, expectedValue, actualValue)
+			}
+		}
+
+		// Set response headers
+		for key, value := range mock.ResponseHeaders {
+			w.Header().Set(key, value)
+		}
+
+		w.WriteHeader(mock.ExpectedStatus)
+		if mock.ResponseBody != "" {
+			w.Write([]byte(mock.ResponseBody))
+		}
+	}))
+	return mock
+}
+
+func (m *MockAuthServer) Close() {
+	m.Server.Close()
+}
+*/

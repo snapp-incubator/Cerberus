@@ -433,7 +433,7 @@ func (a *Authenticator) checkServiceUpstreamAuth(serviceCacheEntry WebservicesCa
 				}
 			}
 		}
-		
+
 		// Update token for the *next* upstream request, if configured
 		if upstreamAuthService.ReadTokenFrom != "" {
 			if newToken := resp.Header.Get(upstreamAuthService.ReadTokenFrom); newToken != "" {

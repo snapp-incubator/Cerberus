@@ -31,10 +31,14 @@ type WebServiceSpec struct {
 	// LookupHeader tells Cerberus which header should be used as the access token for authentication (case-sensitive).
 	LookupHeader string `json:"lookupHeader,omitempty"`
 
-	// UpstreamHttpAuth tells Cerberus whether it needs to forward
-	// authentication to another (HTTP) service or not
+	// Deprecated: use UpstreamHttpAuths for multiple upstream support.
 	// +optional
-	UpstreamHttpAuth UpstreamHttpAuthService `json:"upstreamHttpAuth"`
+	UpstreamHttpAuth UpstreamHttpAuthService `json:"upstreamHttpAuth,omitempty"`
+
+	// UpstreamHttpAuths allows configuring a chain of upstream HTTP authentication services.
+	// Requests will be sent to these services sequentially.
+	// +optional
+	UpstreamHttpAuths []UpstreamHttpAuthService `json:"upstreamHttpAuths,omitempty"`
 
 	// IgnoreIP tells Cerberus whether it should check ip list of specific webservice or not
 	// +optional

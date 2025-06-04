@@ -240,31 +240,36 @@ func NewAuthenticator(logger logr.Logger) *Authenticator {
 	return &a
 }
 
-// validateUpstreamAuthRequest validates the service before calling the upstream.
-// when calling the upstream authentication, one of read or write tokens must be
-// empty and the upstream address must be a valid url.
-func validateUpstreamAuthRequest(service WebservicesCacheEntry) CerberusReason {
-	if service.Spec.UpstreamHttpAuth.ReadTokenFrom == "" ||
-		service.Spec.UpstreamHttpAuth.WriteTokenTo == "" {
+// validateUpstreamAuthRequest validates a single upstream service configuration.
+// ReadTokenFrom and WriteTokenTo must not be empty, and the address must be a valid URL.
+func validateUpstreamAuthRequest(upstreamAuth v1alpha1.UpstreamHttpAuthService) CerberusReason {
+	if upstreamAuth.ReadTokenFrom == "" || upstreamAuth.WriteTokenTo == "" {
 		return CerberusReasonTargetAuthTokenEmpty
 	}
-	if !govalidator.IsRequestURL(service.Spec.UpstreamHttpAuth.Address) {
+	if !govalidator.IsRequestURL(upstreamAuth.Address) {
 		return CerberusReasonInvalidUpstreamAddress
 	}
 	return ""
 }
 
-// setupUpstreamAuthRequest create request object to call upstream authentication
-func setupUpstreamAuthRequest(upstreamHttpAuth *v1alpha1.UpstreamHttpAuthService, request *Request) (*http.Request, error) {
-	token := request.Request.Header.Get(upstreamHttpAuth.ReadTokenFrom)
+// setupUpstreamAuthRequest creates a request object to call an upstream authentication service.
+// It uses the provided currentUpstreamToken and forwards specified headers from the previous response.
+func setupUpstreamAuthRequest(upstreamHttpAuth *v1alpha1.UpstreamHttpAuthService, currentUpstreamToken string, forwardedHeaders http.Header) (*http.Request, error) {
 	req, err := http.NewRequest("GET", upstreamHttpAuth.Address, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header = http.Header{
-		upstreamHttpAuth.WriteTokenTo: {token},
-		"Content-Type":                {"application/json"},
+	req.Header = forwardedHeaders // Start with headers to forward
+
+	// Ensure Content-Type and the auth token header are set correctly.
+	// If forwardedHeaders already contains WriteTokenTo or Content-Type, they will be overwritten here,
+	// which is generally the desired behavior as these are specific to this request.
+	if req.Header == nil {
+		req.Header = make(http.Header)
 	}
+	req.Header.Set(upstreamHttpAuth.WriteTokenTo, currentUpstreamToken)
+	req.Header.Set("Content-Type", "application/json")
+
 	return req, nil
 }
 
@@ -306,68 +311,171 @@ func processResponseError(err error) CerberusReason {
 }
 
 // checkServiceUpstreamAuth function is designed to validate the request through
-// the upstream authentication for a given webservice
-func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, request *Request, extraHeaders *ExtraHeaders, ctx context.Context) (reason CerberusReason) {
-	start_time := time.Now()
+// a chain of upstream authentication services for a given webservice.
+func (a *Authenticator) checkServiceUpstreamAuth(serviceCacheEntry WebservicesCacheEntry, origRequest *Request, extraHeaders *ExtraHeaders, ctx context.Context) (reason CerberusReason) {
+	overallStartTime := time.Now()
 	downstreamDeadline, hasDownstreamDeadline := ctx.Deadline()
 	serviceUpstreamAuthCalls.With(AddWithDownstreamDeadlineLabel(nil, hasDownstreamDeadline)).Inc()
 
-	_, span := tracing.StartSpan(ctx, "cerberus-upstream-auth",
-		attribute.String("upstream-auth-address", service.Spec.UpstreamHttpAuth.Address),
-	)
-	defer func() {
-		tracing.EndSpan(span, start_time,
-			attribute.String("cerberus-reason", string(reason)),
-		)
-	}()
+	// accumulatedCareHeaders will store all CareHeaders from all successful upstream responses
+	accumulatedCareHeaders := make(http.Header)
+	// currentRequestToken holds the token to be sent to the current upstream service
+	var currentRequestToken string
+	// headersToForward holds CareHeaders from the *previous* successful response to be sent to the *current* request
+	headersToForward := make(http.Header)
 
-	if reason := validateUpstreamAuthRequest(service); reason != "" {
-		return reason
-	}
-	upstreamAuth := service.Spec.UpstreamHttpAuth
-	req, err := setupUpstreamAuthRequest(&upstreamAuth, request)
-	if err != nil {
-		return CerberusReasonUpstreamAuthNoReq
-	}
-	a.adjustTimeout(upstreamAuth.Timeout, downstreamDeadline, hasDownstreamDeadline)
+	var upstreamServicesToProcess []v1alpha1.UpstreamHttpAuthService
 
-	reqStart := time.Now()
-	resp, err := a.httpClient.Do(req)
-	reqDuration := time.Since(reqStart)
-
-	span.SetAttributes(
-		attribute.String("upstream-http-request-start", reqStart.Format(tracing.TimeFormat)),
-		attribute.String("upstream-http-request-end", time.Now().Format(tracing.TimeFormat)),
-		attribute.Float64("upstream-http-request-rtt-seconds", time.Since(reqStart).Seconds()),
-	)
-
-	if resp != nil {
-		span.SetAttributes(attribute.Int("upstream-auth-status-code", resp.StatusCode))
-		labels := AddWithDownstreamDeadlineLabel(AddStatusLabel(nil, resp.StatusCode), hasDownstreamDeadline)
-		upstreamAuthRequestDuration.With(labels).Observe(reqDuration.Seconds())
+	if len(serviceCacheEntry.Spec.UpstreamHttpAuths) > 0 {
+		upstreamServicesToProcess = serviceCacheEntry.Spec.UpstreamHttpAuths
+		if serviceCacheEntry.Spec.UpstreamHttpAuth.Address != "" {
+			a.logger.Info("Both UpstreamHttpAuths and deprecated UpstreamHttpAuth are set. UpstreamHttpAuths will take precedence.", "webservice", serviceCacheEntry.LocalName())
+		}
+	} else if serviceCacheEntry.Spec.UpstreamHttpAuth.Address != "" {
+		upstreamServicesToProcess = []v1alpha1.UpstreamHttpAuthService{serviceCacheEntry.Spec.UpstreamHttpAuth}
 	} else {
-		labels := AddWithDownstreamDeadlineLabel(nil, hasDownstreamDeadline)
-		upstreamAuthFailedRequests.With(labels).Inc()
+		// No upstream services configured, so authentication is considered successful at this stage.
+		return CerberusReasonNotSet
 	}
 
-	if reason := processResponseError(err); reason != "" {
-		span.RecordError(err)
-		span.SetStatus(otelcodes.Error, "upstream auth http request faild")
-		return reason
+	// Initial token read from the original client request, based on the *first* upstream's config.
+	if len(upstreamServicesToProcess) > 0 {
+		firstUpstream := upstreamServicesToProcess[0]
+		if firstUpstream.ReadTokenFrom != "" {
+			currentRequestToken = origRequest.Request.Header.Get(firstUpstream.ReadTokenFrom)
+		}
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return CerberusReasonUnauthorized
+	for i, upstreamAuthService := range upstreamServicesToProcess {
+		loopIterationStartTime := time.Now()
+		parentCtxForLoopIteration := ctx
+		if i > 0 { // For subsequent requests, the parent span is the previous upstream call
+			// This logic might need refinement if spans aren't nested as expected.
+			// For now, each upstream call is a child of the main checkServiceUpstreamAuth span.
+		}
+
+		iterationSpanCtx, iterationSpan := tracing.StartSpan(parentCtxForLoopIteration, "cerberus-upstream-auth-iteration",
+			attribute.String("upstream-auth-address", upstreamAuthService.Address),
+			attribute.Int("upstream-auth-index", i),
+		)
+		defer tracing.EndSpan(iterationSpan, loopIterationStartTime, attribute.String("cerberus-reason", string(reason)))
+
+		if reason = validateUpstreamAuthRequest(upstreamAuthService); reason != "" {
+			iterationSpan.SetStatus(otelcodes.Error, "validation failed")
+			return reason // Validation failure for this specific upstream service
+		}
+
+		// Prepare the request for the current upstream service
+		req, err := setupUpstreamAuthRequest(&upstreamAuthService, currentRequestToken, headersToForward)
+		if err != nil {
+			iterationSpan.RecordError(err)
+			iterationSpan.SetStatus(otelcodes.Error, "failed to setup upstream request")
+			return CerberusReasonUpstreamAuthNoReq // Failed to create the request object
+		}
+		req = req.WithContext(iterationSpanCtx) // Propagate tracing context
+
+		a.adjustTimeout(upstreamAuthService.Timeout, downstreamDeadline, hasDownstreamDeadline)
+
+		reqStartTime := time.Now()
+		resp, err := a.httpClient.Do(req)
+		reqDuration := time.Since(reqStartTime)
+
+		iterationSpan.SetAttributes(
+			attribute.String("upstream-http-request-start", reqStartTime.Format(tracing.TimeFormat)),
+			attribute.String("upstream-http-request-end", time.Now().Format(tracing.TimeFormat)),
+			attribute.Float64("upstream-http-request-rtt-seconds", reqDuration.Seconds()),
+		)
+
+		if resp != nil {
+			iterationSpan.SetAttributes(attribute.Int("upstream-auth-status-code", resp.StatusCode))
+			labels := AddWithDownstreamDeadlineLabel(AddStatusLabel(nil, resp.StatusCode), hasDownstreamDeadline)
+			upstreamAuthRequestDuration.With(labels).Observe(reqDuration.Seconds())
+		} else {
+			labels := AddWithDownstreamDeadlineLabel(nil, hasDownstreamDeadline)
+			upstreamAuthFailedRequests.With(labels).Inc()
+		}
+
+		if reason = processResponseError(err); reason != "" {
+			iterationSpan.RecordError(err)
+			iterationSpan.SetStatus(otelcodes.Error, "upstream auth http request failed")
+			return reason // HTTP call error (e.g., timeout, network issue)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			iterationSpan.SetStatus(otelcodes.Error, "upstream auth returned non-OK status")
+			return CerberusReasonUnauthorized // Non-200 status from upstream
+		}
+
+		// Successful authentication from this upstream service
+		iterationSpan.SetStatus(otelcodes.Ok, "upstream auth successful")
+
+		// Clear headersToForward for the next iteration, then populate with current response's CareHeaders
+		headersToForward = make(http.Header)
+		for _, careHeaderName := range upstreamAuthService.CareHeaders {
+			if values := resp.Header.Values(careHeaderName); len(values) > 0 {
+				// Forward all values for the care header
+				for _, value := range values {
+					headersToForward.Add(careHeaderName, value)
+					// Also accumulate for the final downstream response
+                                        // Use .Add to handle multi-value headers correctly for extraHeaders
+                                        if _, ok := (*extraHeaders)[careHeaderName]; !ok {
+                                            (*extraHeaders)[careHeaderName] = values[0] // For single string map
+                                        } else {
+                                             // This part is tricky with ExtraHeaders map[string]string.
+                                             // For now, just appending to existing if already there, separated by comma.
+                                             // A better solution might be to change ExtraHeaders type.
+                                            (*extraHeaders)[careHeaderName] += "," + values[0]
+                                        }
+
+                                        // Accumulate for actual downstream response headers (supports multi-value)
+                                        accumulatedCareHeaders.Add(careHeaderName, value)
+				}
+			}
+		}
+
+		// Update token for the *next* upstream request, if configured
+		if upstreamAuthService.ReadTokenFrom != "" {
+			if newToken := resp.Header.Get(upstreamAuthService.ReadTokenFrom); newToken != "" {
+				currentRequestToken = newToken
+				iterationSpan.SetAttributes(attribute.Bool("token-propagated-to-next-upstream", true))
+			} else {
+				iterationSpan.SetAttributes(attribute.Bool("token-propagated-to-next-upstream", false))
+				// Token for next request remains unchanged if not found in current response
+			}
+		}
 	}
-	// add requested careHeaders to extraHeaders for response
-	copyUpstreamHeaders(resp, extraHeaders, service.Spec.UpstreamHttpAuth.CareHeaders)
-	return ""
+
+	// If loop completes, all upstreams authenticated successfully.
+	// The accumulatedCareHeaders are already added to *extraHeaders.
+	// We need to make sure *extraHeaders correctly reflects multi-value headers.
+	// The current logic for *extraHeaders (map[string]string) is problematic for multi-value.
+	// Let's rebuild *extraHeaders from accumulatedCareHeaders (http.Header) to handle this better.
+	// Clear existing extraHeaders that might have been partially populated
+	for k := range *extraHeaders {
+		delete(*extraHeaders, k)
+	}
+	for key, values := range accumulatedCareHeaders {
+		if len(values) > 0 {
+			(*extraHeaders)[key] = strings.Join(values, ",") // Join multiple values if any
+		}
+	}
+
+
+	tracing.EndSpan(nil, overallStartTime) // End the main span for checkServiceUpstreamAuth
+	return CerberusReasonNotSet // "" indicates success
 }
 
 // hasUpstreamAuth evaluates whether the provided webservice
-// upstreamauth instance is considered empty or not
+// has any upstream authentication services configured, checking new and deprecated fields.
 func hasUpstreamAuth(service WebservicesCacheEntry) bool {
-	return service.Spec.UpstreamHttpAuth.Address != ""
+	if len(service.Spec.UpstreamHttpAuths) > 0 {
+		return true
+	}
+	if service.Spec.UpstreamHttpAuth.Address != "" {
+		return true
+	}
+	return false
 }
 
 // generateResponse initializes defaults for cerberus http result and creates a

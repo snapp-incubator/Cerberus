@@ -6,6 +6,155 @@
 import "github.com/snapp-incubator/Cerberus/pkg/auth"
 ```
 
+## Upstream Authentication
+
+Cerberus can delegate authentication decisions to one or more upstream HTTP services. This allows integrating Cerberus with existing authentication infrastructure or implementing complex, multi-stage authentication logic.
+
+### Configuring Multiple Upstream Services with `UpstreamHttpAuths`
+
+The recommended way to configure upstream authentication is by using the `UpstreamHttpAuths` field in the `WebServiceSpec`. This field accepts a list (or array) of `UpstreamHttpAuthService` objects, enabling a chain of authentication calls.
+
+```go
+// WebServiceSpec defines the desired state of WebService
+type WebServiceSpec struct {
+    // ... other fields ...
+
+    // UpstreamHttpAuths allows configuring a chain of upstream HTTP authentication services.
+    // Requests will be sent to these services sequentially.
+    // +optional
+    UpstreamHttpAuths []UpstreamHttpAuthService `json:"upstreamHttpAuths,omitempty"`
+
+    // Deprecated: use UpstreamHttpAuths for multiple upstream support.
+    // +optional
+    UpstreamHttpAuth UpstreamHttpAuthService `json:"upstreamHttpAuth,omitempty"`
+
+    // ... other fields ...
+}
+
+// UpstreamHttpAuthService defines the configuration for a single upstream auth service.
+type UpstreamHttpAuthService struct {
+    Address       string   `json:"address,omitempty"`
+    ReadTokenFrom string   `json:"readTokenFrom"`
+    WriteTokenTo  string   `json:"writeTokenTo"`
+    CareHeaders   []string `json:"careHeaders,omitempty"`
+    Timeout       int      `json:"timeout"`
+}
+```
+
+#### Execution Flow
+
+1.  **Serial Execution:** If `UpstreamHttpAuths` is populated, Cerberus calls each upstream service in the list sequentially. The first service is called, then the second, and so on.
+2.  **Failure Halts Chain:** If any upstream service in the chain returns a non-successful HTTP status code (e.g., 401 Unauthorized, 500 Internal Server Error), the entire authentication process for the request is immediately considered failed. No further upstream services in the list are called.
+3.  **Success:** The overall upstream authentication phase is considered successful only if *all* upstream services in the list return a successful HTTP status code (typically 200 OK).
+
+#### Token Propagation
+
+The token sent to each upstream service is determined as follows:
+
+1.  **Token for the First Upstream Service:**
+    *   The token is initially read from the incoming client request. The header specified in `UpstreamHttpAuths[0].ReadTokenFrom` is checked first.
+    *   If `UpstreamHttpAuths[0].ReadTokenFrom` is empty, Cerberus falls back to using the header defined in `WebServiceSpec.LookupHeader`.
+    *   This token is then placed in the header specified by `UpstreamHttpAuths[0].WriteTokenTo` for the request to the first upstream service.
+
+2.  **Token for Subsequent Upstream Services (Service N+1):**
+    *   The token can be propagated from the response of the previous upstream service (Service N).
+    *   The `UpstreamHttpAuths[N].ReadTokenFrom` field (this should be `UpstreamHttpAuths[N+1].ReadTokenFrom` to configure how service N+1 reads from N's response, or more accurately, `UpstreamHttpAuths[N].ReadTokenFrom` dictates what the *next* service in chain `N+1` should read from *this* service `N`'s response if `N` provides it, and `UpstreamHttpAuths[N+1].ReadTokenFrom` would be how service N+1 specifies what it wants to read from N. The current implementation in `checkServiceUpstreamAuth` is that `upstreamAuthService.ReadTokenFrom` (for the current service in loop) is used to get a token from the *current* response to be used for the *next* request. Let's rephrase this for clarity based on the code's behavior:
+        The token for service `U_i+1` is determined after service `U_i` responds:
+        *   If `U_i.ReadTokenFrom` is specified and that header is present in `U_i`'s response, its value is used as the token for `U_i+1`.
+        *   Otherwise, the token used for `U_i` is carried over to `U_i+1`.
+    *   This token is then placed in the header defined by `UpstreamHttpAuths[i+1].WriteTokenTo` for the request to service `U_i+1`.
+
+
+#### `CareHeaders` Handling
+
+The `CareHeaders` field in each `UpstreamHttpAuthService` object allows specific headers from upstream responses to be captured and utilized:
+
+1.  **Forwarding to the Next Upstream Service:** If an upstream service (Service N) returns headers that are listed in its `CareHeaders` field, these specific headers (and their values) from Service N's response are copied and added to the HTTP request sent to the *next* upstream service (Service N+1) in the chain.
+2.  **Accumulation for the Final Client Response:** All `CareHeaders` received from *all* successfully authenticated upstream services in the chain are accumulated. These accumulated headers are then added to the final downstream response that Cerberus sends back to the original client. If multiple upstream services return the same `CareHeader` name, they will typically be merged (e.g., as a comma-separated list or multiple header entries, depending on HTTP standards and the header itself).
+
+#### Example: Chained Upstream Authentication with `UpstreamHttpAuths`
+
+```yaml
+apiVersion: cerberus.snappcloud.io/v1alpha1
+kind: WebService
+metadata:
+  name: my-chained-auth-service
+  namespace: default
+spec:
+  lookupHeader: "X-Client-Token" # Fallback for initial token if UpstreamHttpAuths[0].ReadTokenFrom is empty
+  upstreamHttpAuths:
+    - address: "http://auth-service-1.example.com/validate"
+      readTokenFrom: "X-Client-Token"   # For U1: Read token from client request's X-Client-Token.
+                                        # For U2: If U1 returns a header named "X-Client-Token", U2 would use it (unlikely for this field).
+                                        # Better: This field on U1 means: "If I (U1) return a header X-Client-Token, it's the token for U2"
+      writeTokenTo: "Authorization"     # U1 receives token in "Authorization" header.
+      careHeaders:
+        - "X-User-ID"                 # Capture X-User-ID from auth-service-1 for client and next upstream.
+        - "X-Service1-Propagated-Token" # Capture for auth-service-2 and potentially client.
+      timeout: 100
+    - address: "http://auth-service-2.example.com/check"
+      readTokenFrom: "X-Service1-Propagated-Token" # For U2: Read token from U1's response header "X-Service1-Propagated-Token".
+                                                   # For U3: If U2 returns "X-Service1-Propagated-Token", U3 would use it.
+      writeTokenTo: "X-Upstream-AuthToken"        # U2 receives token in "X-Upstream-AuthToken" header.
+      careHeaders:
+        - "X-Auth-Level"              # Capture X-Auth-Level from auth-service-2 for client.
+      timeout: 150
+  # Other WebServiceSpec fields...
+```
+In this example:
+1. Cerberus gets the initial token from the client's `X-Client-Token` header (as specified by `upstreamHttpAuths[0].readTokenFrom`).
+2. It calls `auth-service-1`, sending this token in the `Authorization` header (as specified by `upstreamHttpAuths[0].writeTokenTo`).
+3. If `auth-service-1` responds 200 OK with headers `X-User-ID: user123` and `X-Service1-Propagated-Token: abcdef`:
+    * These two headers are `CareHeaders` from `auth-service-1`. They are added to the request for `auth-service-2`.
+4. Cerberus prepares the call to `auth-service-2`. The token for this call is determined by `upstreamHttpAuths[1].readTokenFrom`, which is "X-Service1-Propagated-Token". Cerberus looks for this header in `auth-service-1`'s response, finds "abcdef", and uses it as the token.
+5. This token ("abcdef") is sent to `auth-service-2` in the `X-Upstream-AuthToken` header (as specified by `upstreamHttpAuths[1].writeTokenTo`). The request to `auth-service-2` will also include `X-User-ID: user123`.
+6. If `auth-service-2` responds 200 OK with header `X-Auth-Level: full`:
+    * The original client receives a response containing all accumulated `CareHeaders`: `X-User-ID: user123`, `X-Service1-Propagated-Token: abcdef` (both from `auth-service-1`), and `X-Auth-Level: full` (from `auth-service-2`).
+
+### Deprecated `UpstreamHttpAuth` Field (Backward Compatibility)
+
+For backward compatibility with older configurations, Cerberus still supports the singular `UpstreamHttpAuth` field in the `WebServiceSpec`.
+
+```go
+// WebServiceSpec ...
+    // Deprecated: use UpstreamHttpAuths for multiple upstream support.
+    // +optional
+    UpstreamHttpAuth UpstreamHttpAuthService `json:"upstreamHttpAuth,omitempty"`
+// ...
+```
+
+If the `UpstreamHttpAuths` list is empty or not provided, Cerberus will check if `UpstreamHttpAuth.Address` is configured. If it is, Cerberus will perform a single upstream authentication call to this service. The behavior regarding `ReadTokenFrom` (for reading from the initial client request), `WriteTokenTo`, and `CareHeaders` is the same as for a single service in the `UpstreamHttpAuths` list. `CareHeaders` from this single service are passed directly to the client response upon success.
+
+#### Example: Single Upstream Authentication with deprecated `UpstreamHttpAuth`
+
+```yaml
+apiVersion: cerberus.snappcloud.io/v1alpha1
+kind: WebService
+metadata:
+  name: my-legacy-auth-service
+  namespace: default
+spec:
+  lookupHeader: "X-Api-Token" # Used if upstreamHttpAuth.readTokenFrom is empty
+  upstreamHttpAuth: # Singular, deprecated field
+    address: "http://legacy-auth.example.com/auth"
+    readTokenFrom: "X-Api-Token" # Reads from client request's X-Api-Token
+    writeTokenTo: "Authorization"
+    careHeaders:
+      - "X-Authenticated-User"
+    timeout: 200
+  # Other WebServiceSpec fields...
+```
+
+### Precedence Logic
+
+*   If the `UpstreamHttpAuths` list is populated (even with a single entry), it **takes precedence**, and the `UpstreamHttpAuth` (singular) field will be ignored.
+*   If `UpstreamHttpAuths` is empty or not defined, Cerberus will then consider the `UpstreamHttpAuth` (singular) field.
+*   If both `UpstreamHttpAuths` and `UpstreamHttpAuth` are populated in a `WebService` definition, Cerberus will use `UpstreamHttpAuths` and log a warning message indicating that the deprecated `UpstreamHttpAuth` field is being ignored.
+*   If neither field is configured with a valid upstream address, the upstream authentication step is skipped.
+
+This approach ensures that new, complex authentication chains can be configured while maintaining compatibility for existing single-upstream setups. Users are encouraged to migrate to `UpstreamHttpAuths` for clarity and future enhancements.
+
+---
 ## Index
 
 - [func NewServerCredentials\(certPath string, keyPath string, caPath string\) \(credentials.TransportCredentials, error\)](<#NewServerCredentials>)

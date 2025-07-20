@@ -263,6 +263,7 @@ func setupUpstreamAuthRequest(upstreamHttpAuth *v1alpha1.UpstreamHttpAuthService
 	}
 	req.Header = http.Header{
 		upstreamHttpAuth.WriteTokenTo: {token},
+		"X-Service-Name":              {"cerberus"}
 		"Content-Type":                {"application/json"},
 	}
 	return req, nil

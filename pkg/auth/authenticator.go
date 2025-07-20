@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -21,6 +22,15 @@ import (
 // downstreamDeadlineOffset sets an offset to downstream deadline inorder
 // to save a little time to update metrics and answer downstream request
 const downstreamDeadlineOffset = 50 * time.Microsecond
+
+// getServiceName returns the service name from environment variable SERVICE_NAME
+// or defaults to "cerberus" if not set
+func getServiceName() string {
+	if serviceName := os.Getenv("UPSTREAM_AUTH_SERVICE_NAME"); serviceName != "" {
+		return serviceName
+	}
+	return "cerberus"
+}
 
 // Authenticator can generate cache from Kubernetes API server
 // and it implements envoy.CheckRequest interface
@@ -263,7 +273,7 @@ func setupUpstreamAuthRequest(upstreamHttpAuth *v1alpha1.UpstreamHttpAuthService
 	}
 	req.Header = http.Header{
 		upstreamHttpAuth.WriteTokenTo: {token},
-		"X-Service-Name":              {"cerberus"},
+		"X-Service-Name":              {getServiceName()},
 		"Content-Type":                {"application/json"},
 	}
 	return req, nil

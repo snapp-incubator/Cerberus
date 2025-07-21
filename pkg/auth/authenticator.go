@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -254,13 +253,17 @@ func NewAuthenticator(logger logr.Logger) *Authenticator {
 // validateUpstreamAuthRequest validates the service before calling the upstream.
 // when calling the upstream authentication, one of read or write tokens must be
 // empty and the upstream address must be a valid url.
-func validateUpstreamAuthRequest(service WebservicesCacheEntry) CerberusReason {
+func validateUpstreamAuthRequest(service WebservicesCacheEntry, request *Request) CerberusReason {
 	if service.Spec.UpstreamHttpAuth.ReadTokenFrom == "" ||
 		service.Spec.UpstreamHttpAuth.WriteTokenTo == "" {
 		return CerberusReasonTargetAuthTokenEmpty
 	}
 	if !govalidator.IsRequestURL(service.Spec.UpstreamHttpAuth.Address) {
 		return CerberusReasonInvalidUpstreamAddress
+	}
+	token := request.Request.Header.Get(service.Spec.UpstreamHttpAuth.ReadTokenFrom)
+	if token == "" {
+		return CerberusReasonUpstreamAuthHeaderEmpty
 	}
 	return ""
 }
@@ -277,7 +280,6 @@ func setupUpstreamAuthRequest(upstreamHttpAuth *v1alpha1.UpstreamHttpAuthService
 		"X-Service-Name":              {getServiceName()},
 		"Content-Type":                {"application/json"},
 	}
-	fmt.Println("upstream req headers", req.Header)
 	return req, nil
 }
 
@@ -334,7 +336,7 @@ func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, 
 		)
 	}()
 
-	if reason := validateUpstreamAuthRequest(service); reason != "" {
+	if reason := validateUpstreamAuthRequest(service, request); reason != "" {
 		return reason
 	}
 	upstreamAuth := service.Spec.UpstreamHttpAuth

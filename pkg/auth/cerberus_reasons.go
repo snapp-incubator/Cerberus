@@ -77,6 +77,10 @@ const (
 	// has an invalid upstream address in it's manifest
 	CerberusReasonInvalidUpstreamAddress CerberusReason = "invalid-auth-upstream"
 
+	// CerberusReasonUpstreamAuthHeaderEmpty means that request header that
+	// should be forwarded to upstream auth service is empty
+	CerberusReasonUpstreamAuthHeaderEmpty CerberusReason = "upstream-auth-header-empty"
+
 	// CerberusReasonSourceAuthTokenEmpty means that requested webservice
 	// does not contain source upstream auth lookup header in it's manifest
 	CerberusReasonSourceAuthTokenEmpty CerberusReason = "upstream-source-identifier-empty"

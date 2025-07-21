@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -276,6 +277,7 @@ func setupUpstreamAuthRequest(upstreamHttpAuth *v1alpha1.UpstreamHttpAuthService
 		"X-Service-Name":              {getServiceName()},
 		"Content-Type":                {"application/json"},
 	}
+	fmt.Println("upstream req headers", req.Header)
 	return req, nil
 }
 

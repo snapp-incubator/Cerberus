@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/snapp-incubator/Cerberus/internal/tracing"
 	"go.opentelemetry.io/otel/attribute"
 	otelcodes "go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -159,27 +161,8 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (finalRespo
 	wsvc, ns, reason := readRequestContext(request)
 
 	// generate opentelemetry span with given parameters
-	parentCtx := tracing.ReadParentSpanFromRequest(ctx, request.Request)
-	ctx, span := tracing.StartSpan(parentCtx, "CheckFunction",
-		attribute.String("webservice", wsvc),
-		attribute.String("namespace", ns),
-	)
-	defer func() {
-		extraAttrs := []attribute.KeyValue{
-			attribute.String("cerberus-reason", string(reason)),
-		}
-		if finalResponse != nil {
-			extraAttrs = append(extraAttrs,
-				attribute.Bool("final-response-ok", finalResponse.Allow),
-			)
-			for k, v := range finalResponse.Response.Header {
-				extraAttrs = append(extraAttrs,
-					attribute.String("final-extra-headers-"+k, strings.Join(v, ",")),
-				)
-			}
-		}
-		tracing.EndSpan(span, start_time, extraAttrs...)
-	}()
+	ctx, span := startSpan(ctx, request.Request, wsvc, ns)
+	defer endSpan(span, start_time, finalResponse, reason)
 
 	if reason != "" {
 		return generateResponse(reason, nil), nil
@@ -193,6 +176,7 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (finalRespo
 	var extraHeaders ExtraHeaders
 
 	reason, wsvcCacheEntry := a.readService(wsvc)
+	addHeadersToSpan(request.Request, wsvcCacheEntry, span)
 	if reason == "" {
 		var cerberusExtraHeaders CerberusExtraHeaders
 
@@ -212,6 +196,53 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (finalRespo
 
 	finalResponse = generateResponse(reason, extraHeaders)
 	return
+}
+
+// startSpan starts span for Check Function
+func startSpan(ctx context.Context, request http.Request, wsvc string, ns string) (context.Context, trace.Span) {
+	parentCtx := tracing.ReadParentSpanFromRequest(ctx, request)
+	return tracing.StartSpan(parentCtx, "CheckFunction",
+		attribute.String("webservice", wsvc),
+		attribute.String("namespace", ns),
+	)
+}
+
+// endSpan ends Check Function span and adds attributes.
+func endSpan(span trace.Span, start_time time.Time, finalResponse *Response, reason CerberusReason) {
+	extraAttrs := []attribute.KeyValue{
+		attribute.String("cerberus-reason", string(reason)),
+	}
+	if finalResponse != nil {
+		extraAttrs = append(extraAttrs,
+			attribute.Bool("final-response-ok", finalResponse.Allow),
+		)
+		for k, v := range finalResponse.Response.Header {
+			extraAttrs = append(extraAttrs,
+				attribute.String("final-extra-headers-"+k, strings.Join(v, ",")),
+			)
+		}
+	}
+	tracing.EndSpan(span, start_time, extraAttrs...)
+}
+
+// addHeadersToSpan adds request headers to Span
+func addHeadersToSpan(request http.Request, service WebservicesCacheEntry, span trace.Span) {
+	// Add request headers to span
+	for headerName, headerValues := range request.Header {
+		headerValue := strings.Join(headerValues, ",")
+
+		// For Authorization header, only include first 20 chars
+		if headerName == service.Spec.LookupHeader && len(headerValue) > 20 {
+			headerValue = headerValue[:20]
+		}
+		if hasUpstreamAuth(service) && headerName == service.Spec.UpstreamHttpAuth.ReadTokenFrom && len(headerValue) > 20 {
+			headerValue = headerValue[:20]
+		}
+
+		span.SetAttributes(
+			attribute.String("http.header."+headerName, headerValue),
+		)
+	}
 }
 
 func readRequestContext(request *Request) (wsvc string, ns string, reason CerberusReason) {
@@ -253,7 +284,7 @@ func NewAuthenticator(logger logr.Logger) *Authenticator {
 // validateUpstreamAuthRequest validates the service before calling the upstream.
 // when calling the upstream authentication, one of read or write tokens must be
 // empty and the upstream address must be a valid url.
-func validateUpstreamAuthRequest(service WebservicesCacheEntry, request *Request) CerberusReason {
+func validateUpstreamAuthRequest(service WebservicesCacheEntry, _ *Request) CerberusReason {
 	if service.Spec.UpstreamHttpAuth.ReadTokenFrom == "" ||
 		service.Spec.UpstreamHttpAuth.WriteTokenTo == "" {
 		return CerberusReasonTargetAuthTokenEmpty
@@ -261,10 +292,11 @@ func validateUpstreamAuthRequest(service WebservicesCacheEntry, request *Request
 	if !govalidator.IsRequestURL(service.Spec.UpstreamHttpAuth.Address) {
 		return CerberusReasonInvalidUpstreamAddress
 	}
-	token := request.Request.Header.Get(service.Spec.UpstreamHttpAuth.ReadTokenFrom)
-	if token == "" {
-		return CerberusReasonUpstreamAuthHeaderEmpty
-	}
+	// uncomment if you want to stop upstream auth call when token is empty
+	// token := request.Request.Header.Get(service.Spec.UpstreamHttpAuth.ReadTokenFrom)
+	// if token == "" {
+	// 	return CerberusReasonUpstreamAuthHeaderEmpty
+	// }
 	return ""
 }
 
@@ -337,11 +369,15 @@ func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, 
 	}()
 
 	if reason := validateUpstreamAuthRequest(service, request); reason != "" {
+		span.RecordError(errors.New("upstream auth request validation:" + string(reason)))
+		span.SetStatus(otelcodes.Error, "upstream auth http request faild")
 		return reason
 	}
 	upstreamAuth := service.Spec.UpstreamHttpAuth
 	req, err := setupUpstreamAuthRequest(&upstreamAuth, request)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(otelcodes.Error, "failed to create upstream auth request")
 		return CerberusReasonUpstreamAuthNoReq
 	}
 	a.adjustTimeout(upstreamAuth.Timeout, downstreamDeadline, hasDownstreamDeadline)
@@ -372,6 +408,8 @@ func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, 
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		span.RecordError(err)
+		span.SetStatus(otelcodes.Error, "upstream auth non 200 status code")
 		return CerberusReasonUnauthorized
 	}
 	// add requested careHeaders to extraHeaders for response

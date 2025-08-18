@@ -768,21 +768,21 @@ func TestValidateUpstreamAuthRequest(t *testing.T) {
 	service := WebservicesCacheEntry{}
 	service.Spec.UpstreamHttpAuth.ReadTokenFrom = ""
 	service.Spec.UpstreamHttpAuth.WriteTokenTo = ""
-	reason := validateUpstreamAuthRequest(service)
+	reason := validateUpstreamAuthRequest(service, nil)
 	assert.Equal(t, CerberusReasonTargetAuthTokenEmpty, reason, "Expected target auth token empty")
 
 	// Test case 2: WriteTokenTo is empty
 	service = WebservicesCacheEntry{}
 	service.Spec.UpstreamHttpAuth.ReadTokenFrom = "token"
 	service.Spec.UpstreamHttpAuth.WriteTokenTo = ""
-	reason = validateUpstreamAuthRequest(service)
+	reason = validateUpstreamAuthRequest(service, nil)
 	assert.Equal(t, CerberusReasonTargetAuthTokenEmpty, reason, "Expected target auth token empty")
 
 	// Test case 3: ReadTokenFrom is empty
 	service = WebservicesCacheEntry{}
 	service.Spec.UpstreamHttpAuth.ReadTokenFrom = ""
 	service.Spec.UpstreamHttpAuth.WriteTokenTo = "token"
-	reason = validateUpstreamAuthRequest(service)
+	reason = validateUpstreamAuthRequest(service, nil)
 	assert.Equal(t, CerberusReasonTargetAuthTokenEmpty, reason, "Expected target auth token empty")
 
 	// Test case 4: Address is invalid
@@ -790,7 +790,7 @@ func TestValidateUpstreamAuthRequest(t *testing.T) {
 	service.Spec.UpstreamHttpAuth.ReadTokenFrom = "token"
 	service.Spec.UpstreamHttpAuth.WriteTokenTo = "token"
 	service.Spec.UpstreamHttpAuth.Address = "not a valid URL"
-	reason = validateUpstreamAuthRequest(service)
+	reason = validateUpstreamAuthRequest(service, nil)
 	assert.Equal(t, CerberusReasonInvalidUpstreamAddress, reason, "Expected invalid upstream address")
 
 	// Test case 5: Everything is valid
@@ -798,7 +798,7 @@ func TestValidateUpstreamAuthRequest(t *testing.T) {
 	service.Spec.UpstreamHttpAuth.ReadTokenFrom = "token"
 	service.Spec.UpstreamHttpAuth.WriteTokenTo = "token"
 	service.Spec.UpstreamHttpAuth.Address = "http://example.com"
-	reason = validateUpstreamAuthRequest(service)
+	reason = validateUpstreamAuthRequest(service, nil)
 	assert.Empty(t, reason, "Expected no reason")
 }
 

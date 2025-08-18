@@ -132,11 +132,12 @@ var (
 		[]string{WithDownstreamDeadlineLabel},
 	)
 
-	upstreamAuthEmptyTokens = prometheus.NewCounter(
+	upstreamAuthEmptyTokens = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "upstream_auth_empty_tokens_total",
 			Help: "Total number of UpstreamAuth requests that token were empty",
 		},
+		[]string{WebserviceLabel},
 	)
 )
 

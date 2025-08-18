@@ -295,7 +295,7 @@ func validateUpstreamAuthRequest(service WebservicesCacheEntry, request *Request
 	if request != nil {
 		token := request.Request.Header.Get(service.Spec.UpstreamHttpAuth.ReadTokenFrom)
 		if token == "" {
-			upstreamAuthEmptyTokens.Inc()
+			upstreamAuthEmptyTokens.WithLabelValues(service.LocalName()).Inc()
 
 			// uncomment if you want to stop upstream auth call when token is empty
 			// return CerberusReasonUpstreamAuthHeaderEmpty

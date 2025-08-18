@@ -284,7 +284,7 @@ func NewAuthenticator(logger logr.Logger) *Authenticator {
 // validateUpstreamAuthRequest validates the service before calling the upstream.
 // when calling the upstream authentication, one of read or write tokens must be
 // empty and the upstream address must be a valid url.
-func validateUpstreamAuthRequest(service WebservicesCacheEntry, _ *Request) CerberusReason {
+func validateUpstreamAuthRequest(service WebservicesCacheEntry, request *Request) CerberusReason {
 	if service.Spec.UpstreamHttpAuth.ReadTokenFrom == "" ||
 		service.Spec.UpstreamHttpAuth.WriteTokenTo == "" {
 		return CerberusReasonTargetAuthTokenEmpty
@@ -292,11 +292,15 @@ func validateUpstreamAuthRequest(service WebservicesCacheEntry, _ *Request) Cerb
 	if !govalidator.IsRequestURL(service.Spec.UpstreamHttpAuth.Address) {
 		return CerberusReasonInvalidUpstreamAddress
 	}
-	// uncomment if you want to stop upstream auth call when token is empty
-	// token := request.Request.Header.Get(service.Spec.UpstreamHttpAuth.ReadTokenFrom)
-	// if token == "" {
-	// 	return CerberusReasonUpstreamAuthHeaderEmpty
-	// }
+	if request != nil {
+		token := request.Request.Header.Get(service.Spec.UpstreamHttpAuth.ReadTokenFrom)
+		if token == "" {
+			upstreamAuthEmptyTokens.Inc()
+
+			// uncomment if you want to stop upstream auth call when token is empty
+			// return CerberusReasonUpstreamAuthHeaderEmpty
+		}
+	}
 	return ""
 }
 

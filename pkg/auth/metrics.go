@@ -13,7 +13,7 @@ const (
 	HasUpstreamAuth             = "upstream_auth_enabled"
 	ObjectKindLabel             = "kind"
 	WithDownstreamDeadlineLabel = "with_downstream_deadline"
-	WebserviceLabel 			= "webservice" 
+	WebserviceLabel             = "webservice"
 
 	MetricsKindSecret                  = "secret"
 	MetricsKindWebservice              = "webservice"
@@ -131,6 +131,13 @@ var (
 		},
 		[]string{WithDownstreamDeadlineLabel},
 	)
+
+	upstreamAuthEmptyTokens = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "upstream_auth_empty_tokens_total",
+			Help: "Total number of UpstreamAuth requests that token were empty",
+		},
+	)
 )
 
 func init() {
@@ -196,9 +203,9 @@ func AddWithDownstreamDeadlineLabel(labels prometheus.Labels, hasDeadline bool) 
 }
 
 func AddWebserviceLabel(labels prometheus.Labels, wsvc string) prometheus.Labels {
-    if labels == nil {
-        labels = prometheus.Labels{}
-    }
-    labels[WebserviceLabel] = wsvc
-    return labels
+	if labels == nil {
+		labels = prometheus.Labels{}
+	}
+	labels[WebserviceLabel] = wsvc
+	return labels
 }

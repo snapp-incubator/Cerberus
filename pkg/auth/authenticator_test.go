@@ -761,6 +761,22 @@ func Test_generateResponse(t *testing.T) {
 	assert.Equal(t, expectedResponse.Allow, actualResponse.Allow, "Response should not be allowed")
 	assert.Equal(t, expectedResponse.Response.StatusCode, actualResponse.Response.StatusCode, "HTTP status code should match")
 	assert.Equal(t, expectedResponse.Response.Header, actualResponse.Response.Header, "Response headers should match")
+
+	// Test case 3: Response is not allowed due to auth upstream service is overloaded
+	expectedResponse = &Response{
+		Allow: false,
+		Response: http.Response{
+			StatusCode: http.StatusInternalServerError,
+			Header: http.Header{
+				ExternalAuthHandlerHeader:  {"cerberus"},
+				CerberusHeaderReasonHeader: {"upstream-auth-service-is-overloaded"},
+			},
+		},
+	}
+	actualResponse = generateResponse("upstream-auth-service-is-overloaded", nil)
+	assert.Equal(t, expectedResponse.Allow, actualResponse.Allow, "Response should not be allowed")
+	assert.Equal(t, expectedResponse.Response.StatusCode, actualResponse.Response.StatusCode, "HTTP status code should match")
+	assert.Equal(t, expectedResponse.Response.Header, actualResponse.Response.Header, "Response headers should match")
 }
 
 func TestValidateUpstreamAuthRequest(t *testing.T) {

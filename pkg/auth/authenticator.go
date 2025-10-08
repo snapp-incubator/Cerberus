@@ -12,13 +12,14 @@ import (
 
 	"github.com/asaskevich/govalidator"
 	"github.com/go-logr/logr"
-	"github.com/snapp-incubator/Cerberus/api/v1alpha1"
-	"github.com/snapp-incubator/Cerberus/internal/tracing"
 	"go.opentelemetry.io/otel/attribute"
 	otelcodes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/snapp-incubator/Cerberus/api/v1alpha1"
+	"github.com/snapp-incubator/Cerberus/internal/tracing"
 )
 
 // downstreamDeadlineOffset sets an offset to downstream deadline inorder
@@ -79,6 +80,10 @@ const (
 	// header when load-shedding is done due token priority values
 	TokenPriorityLowerThanServiceMinAccessLimit string = "TokenPriorityLowerThanServiceMinimum"
 )
+
+// StatusServiceIsOverloaded is a custom HTTP status code (529) returned by the
+// Validator service when it is temporarily overloaded and unable to handle new requests.
+const StatusServiceIsOverloaded = 529
 
 // TestAccess will check if given AccessToken (identified by raw token in the request)
 // has access to given Webservice (identified by its name) and returns proper CerberusReason
@@ -412,6 +417,12 @@ func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, 
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == StatusServiceIsOverloaded {
+			span.RecordError(err)
+			span.SetStatus(otelcodes.Error, "upstream auth http request service is overloaded")
+			return CerberusReasonUpstreamAuthServiceIsOverloaded
+		}
+
 		span.RecordError(err)
 		span.SetStatus(otelcodes.Error, "upstream auth non 200 status code")
 		return CerberusReasonUnauthorized
@@ -437,6 +448,8 @@ func generateResponse(reason CerberusReason, extraHeaders ExtraHeaders) *Respons
 	if ok {
 		httpStatusCode = http.StatusOK
 		reason = CerberusReasonOK
+	} else if reason == CerberusReasonUpstreamAuthServiceIsOverloaded {
+		httpStatusCode = http.StatusServiceUnavailable
 	} else {
 		httpStatusCode = http.StatusUnauthorized
 	}

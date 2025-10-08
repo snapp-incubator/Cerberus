@@ -103,5 +103,5 @@ const (
 
 	// CerberusReasonUpstreamAuthServiceIsOverloaded indicates that the upstream authentication service
 	// is currently overloaded and unable to process new requests
-	CerberusReasonUpstreamAuthServiceIsOverloaded CerberusReason = "upstream-service-is-overloaded"
+	CerberusReasonUpstreamAuthServiceIsOverloaded CerberusReason = "upstream-auth-service-is-overloaded"
 )

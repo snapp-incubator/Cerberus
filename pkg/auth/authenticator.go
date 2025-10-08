@@ -12,14 +12,13 @@ import (
 
 	"github.com/asaskevich/govalidator"
 	"github.com/go-logr/logr"
+	"github.com/snapp-incubator/Cerberus/api/v1alpha1"
+	"github.com/snapp-incubator/Cerberus/internal/tracing"
 	"go.opentelemetry.io/otel/attribute"
 	otelcodes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	"github.com/snapp-incubator/Cerberus/api/v1alpha1"
-	"github.com/snapp-incubator/Cerberus/internal/tracing"
 )
 
 // downstreamDeadlineOffset sets an offset to downstream deadline inorder

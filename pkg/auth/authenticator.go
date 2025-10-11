@@ -81,7 +81,7 @@ const (
 )
 
 // StatusServiceIsOverloaded is a custom HTTP status code (529) returned by the
-// Validator service when it is temporarily overloaded and unable to handle new requests.
+// UpstreamAuth service when it is temporarily overloaded and unable to handle new requests.
 const StatusServiceIsOverloaded = 529
 
 // TestAccess will check if given AccessToken (identified by raw token in the request)

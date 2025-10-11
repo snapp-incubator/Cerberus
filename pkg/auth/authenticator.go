@@ -311,9 +311,15 @@ func setupUpstreamAuthRequest(upstreamHttpAuth *v1alpha1.UpstreamHttpAuthService
 	if err != nil {
 		return nil, err
 	}
+
+	svcName := getServiceName()
+	if ctxServiceName := request.Context["serviceName"]; ctxServiceName != "" {
+		svcName = ctxServiceName
+	}
+
 	req.Header = http.Header{
 		upstreamHttpAuth.WriteTokenTo: {token},
-		"X-Service-Name":              {getServiceName()},
+		"X-Service-Name":              {svcName},
 		"Content-Type":                {"application/json"},
 	}
 	return req, nil

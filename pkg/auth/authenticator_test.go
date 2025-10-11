@@ -981,6 +981,30 @@ func TestSetupUpstreamAuthRequest(t *testing.T) {
 	assert.Error(t, actualErr, "Error should occur when service is empty")
 }
 
+func TestSetupUpstreamAuthRequest_ServiceName_Context(t *testing.T) {
+	upstreamAuth := &cerberusv1alpha1.UpstreamHttpAuthService{
+		ReadTokenFrom: "X-Token-Read",
+		WriteTokenTo:  "X-Token-Write",
+		Address:       "http://example.com",
+		Timeout:       1000,
+	}
+
+	request := &Request{
+		Context: map[string]string{
+			"serviceName": "test-service",
+		},
+		Request: http.Request{
+			Header: http.Header{
+				"X-Token-Read": {"value"},
+			},
+		},
+	}
+
+	httpReq, err := setupUpstreamAuthRequest(upstreamAuth, request)
+	assert.NoError(t, err)
+	assert.Equal(t, "test-service", httpReq.Header.Get("X-Service-Name"))
+}
+
 func TestCheck_SuccessfulAuthentication(t *testing.T) {
 	mockHTTPClient := &http.Client{
 		Transport: &MockTransport{

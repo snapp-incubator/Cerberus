@@ -766,7 +766,7 @@ func Test_generateResponse(t *testing.T) {
 	expectedResponse = &Response{
 		Allow: false,
 		Response: http.Response{
-			StatusCode: http.StatusInternalServerError,
+			StatusCode: http.StatusServiceUnavailable,
 			Header: http.Header{
 				ExternalAuthHandlerHeader:  {"cerberus"},
 				CerberusHeaderReasonHeader: {"upstream-auth-service-is-overloaded"},
@@ -977,8 +977,9 @@ func TestSetupUpstreamAuthRequest(t *testing.T) {
 
 	expectedReq, _ := http.NewRequest("GET", "http://example.com", nil)
 	expectedReq.Header = http.Header{
-		"X-Token-Write": {"value"},
-		"Content-Type":  {"application/json"},
+		"X-Token-Write":  {"value"},
+		"X-Service-Name": []string{"cerberus"},
+		"Content-Type":   {"application/json"},
 	}
 
 	actualReq, actualErr := setupUpstreamAuthRequest(upstreamAuth, request)

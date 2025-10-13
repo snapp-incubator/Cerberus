@@ -32,9 +32,9 @@ func (r *Request) FromV2(c *CheckRequestV2) *Request {
 			RawQuery: c.GetAttributes().GetRequest().GetHttp().GetQuery(),
 			Fragment: c.GetAttributes().GetRequest().GetHttp().GetFragment(),
 		},
-		Header: http.Header{},
-		Method: c.GetAttributes().GetRequest().GetHttp().GetMethod(),
-		Proto:  c.GetAttributes().GetRequest().GetHttp().GetProtocol(),
+		Header:     http.Header{},
+		Method:     c.GetAttributes().GetRequest().GetHttp().GetMethod(),
+		Proto:      c.GetAttributes().GetRequest().GetHttp().GetProtocol(),
 		RemoteAddr: c.GetAttributes().GetSource().GetAddress().GetSocketAddress().GetAddress() + ":" + fmt.Sprint(c.GetAttributes().GetSource().GetAddress().GetSocketAddress().GetPortValue()),
 	}
 
@@ -58,9 +58,9 @@ func (r *Request) FromV3(c *CheckRequestV3) *Request {
 			RawQuery: c.GetAttributes().GetRequest().GetHttp().GetQuery(),
 			Fragment: c.GetAttributes().GetRequest().GetHttp().GetFragment(),
 		},
-		Header: http.Header{},
-		Method: c.GetAttributes().GetRequest().GetHttp().GetMethod(),
-		Proto:  c.GetAttributes().GetRequest().GetHttp().GetProtocol(),
+		Header:     http.Header{},
+		Method:     c.GetAttributes().GetRequest().GetHttp().GetMethod(),
+		Proto:      c.GetAttributes().GetRequest().GetHttp().GetProtocol(),
 		RemoteAddr: c.GetAttributes().GetSource().GetAddress().GetSocketAddress().GetAddress() + ":" + fmt.Sprint(c.GetAttributes().GetSource().GetAddress().GetSocketAddress().GetPortValue()),
 	}
 

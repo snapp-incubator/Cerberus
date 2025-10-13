@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"go.opentelemetry.io/contrib/propagators/autoprop"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
@@ -16,8 +17,6 @@ import (
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"go.opentelemetry.io/otel/trace"
-	"go.opentelemetry.io/contrib/propagators/autoprop"
-
 )
 
 const (
@@ -36,40 +35,39 @@ func init() {
 }
 
 func SetTracingProvider(provider string, samplingRatio float64, timeout float64) (err error) {
-    var exporter *otlptrace.Exporter
+	var exporter *otlptrace.Exporter
 
-    switch provider {
-    case HTTPTracingProvider:
-        exporter, err = otlptracehttp.New(context.Background(),
-            otlptracehttp.WithTimeout(time.Second*time.Duration(timeout)),
-        )
-    case GRPCTracingProvider:
-        exporter, err = otlptracegrpc.New(context.Background(),
-            otlptracegrpc.WithTimeout(time.Second*time.Duration(timeout)),
-        )
-    default:
-        err = fmt.Errorf("invalid-tracing-provider")
-    }
+	switch provider {
+	case HTTPTracingProvider:
+		exporter, err = otlptracehttp.New(context.Background(),
+			otlptracehttp.WithTimeout(time.Second*time.Duration(timeout)),
+		)
+	case GRPCTracingProvider:
+		exporter, err = otlptracegrpc.New(context.Background(),
+			otlptracegrpc.WithTimeout(time.Second*time.Duration(timeout)),
+		)
+	default:
+		err = fmt.Errorf("invalid-tracing-provider")
+	}
 
-    if err != nil {
-        return err
-    }
+	if err != nil {
+		return err
+	}
 
-    tp = tracesdk.NewTracerProvider(
-        tracesdk.WithBatcher(exporter),
-        tracesdk.WithSampler(tracesdk.ParentBased(tracesdk.TraceIDRatioBased(samplingRatio))),
-        tracesdk.WithResource(resource.NewWithAttributes(
-            semconv.SchemaURL,
-            semconv.ServiceNameKey.String(ServiceName),
-        )),
-    )
-    cerberusTracer = tp.Tracer(CerberusTracerName)
+	tp = tracesdk.NewTracerProvider(
+		tracesdk.WithBatcher(exporter),
+		tracesdk.WithSampler(tracesdk.ParentBased(tracesdk.TraceIDRatioBased(samplingRatio))),
+		tracesdk.WithResource(resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceNameKey.String(ServiceName),
+		)),
+	)
+	cerberusTracer = tp.Tracer(CerberusTracerName)
 
-    otel.SetTextMapPropagator(autoprop.NewTextMapPropagator())
+	otel.SetTextMapPropagator(autoprop.NewTextMapPropagator())
 
-    return nil
+	return nil
 }
-
 
 func StartSpan(ctx context.Context, spanName string, extraAttrs ...attribute.KeyValue) (context.Context, trace.Span) {
 	newCtx, span := cerberusTracer.Start(ctx, spanName,

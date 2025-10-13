@@ -55,7 +55,6 @@ func (r *AccessTokenReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	return ctrl.Result{}, err
 }
 
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *AccessTokenReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
@@ -74,17 +73,15 @@ func (r *AccessTokenReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		},
 	}
 
-
 	if err := ctrl.NewControllerManagedBy(mgr).
-	For(&cerberusv1alpha1.AccessToken{}).
-	Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(mapSecretMapFunc), builder.WithPredicates(labelPredicate)).
-	Complete(r); err != nil {
-	return err
+		For(&cerberusv1alpha1.AccessToken{}).
+		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(mapSecretMapFunc), builder.WithPredicates(labelPredicate)).
+		Complete(r); err != nil {
+		return err
 	}
 
 	return nil
 }
-
 
 func mapSecretMapFunc(ctx context.Context, a client.Object) []reconcile.Request {
 	return []reconcile.Request{

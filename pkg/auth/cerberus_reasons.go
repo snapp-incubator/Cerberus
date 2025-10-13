@@ -100,4 +100,8 @@ const (
 	// CerberusReasonUpstreamAuthNoReq means that cerberus failed to create
 	// request for specified upstream auth
 	CerberusReasonUpstreamAuthNoReq CerberusReason = "upstream-auth-no-request"
+
+	// CerberusReasonUpstreamAuthServiceIsOverloaded indicates that the upstream authentication service
+	// is currently overloaded and unable to process new requests
+	CerberusReasonUpstreamAuthServiceIsOverloaded CerberusReason = "upstream-auth-service-is-overloaded"
 )

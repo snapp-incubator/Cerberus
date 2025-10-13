@@ -80,6 +80,10 @@ const (
 	TokenPriorityLowerThanServiceMinAccessLimit string = "TokenPriorityLowerThanServiceMinimum"
 )
 
+// StatusServiceIsOverloaded is a custom HTTP status code (529) returned by the
+// UpstreamAuth service when it is temporarily overloaded and unable to handle new requests.
+const StatusServiceIsOverloaded = 529
+
 // TestAccess will check if given AccessToken (identified by raw token in the request)
 // has access to given Webservice (identified by its name) and returns proper CerberusReason
 func (a *Authenticator) TestAccess(request *Request, wsvc WebservicesCacheEntry) (reason CerberusReason, newExtraHeaders CerberusExtraHeaders) {
@@ -418,6 +422,12 @@ func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, 
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == StatusServiceIsOverloaded {
+			span.RecordError(err)
+			span.SetStatus(otelcodes.Error, "upstream auth http request service is overloaded")
+			return CerberusReasonUpstreamAuthServiceIsOverloaded
+		}
+
 		span.RecordError(err)
 		span.SetStatus(otelcodes.Error, "upstream auth non 200 status code")
 		return CerberusReasonUnauthorized
@@ -443,6 +453,8 @@ func generateResponse(reason CerberusReason, extraHeaders ExtraHeaders) *Respons
 	if ok {
 		httpStatusCode = http.StatusOK
 		reason = CerberusReasonOK
+	} else if reason == CerberusReasonUpstreamAuthServiceIsOverloaded {
+		httpStatusCode = http.StatusServiceUnavailable
 	} else {
 		httpStatusCode = http.StatusUnauthorized
 	}

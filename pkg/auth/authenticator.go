@@ -448,7 +448,7 @@ func generateResponse(reason CerberusReason, extraHeaders ExtraHeaders) *Respons
 		httpStatusCode = http.StatusOK
 		reason = CerberusReasonOK
 	} else if reason == CerberusReasonUpstreamAuthServiceIsOverloaded {
-		httpStatusCode = http.StatusInternalServerError
+		httpStatusCode = http.StatusServiceUnavailable
 	} else {
 		httpStatusCode = http.StatusUnauthorized
 	}

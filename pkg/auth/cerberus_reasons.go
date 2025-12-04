@@ -104,4 +104,7 @@ const (
 	// CerberusReasonUpstreamAuthServiceIsOverloaded indicates that the upstream authentication service
 	// is currently overloaded and unable to process new requests
 	CerberusReasonUpstreamAuthServiceIsOverloaded CerberusReason = "upstream-auth-service-is-overloaded"
+
+	// CerberusReasonWebservicelessAuthURLEmpty means that the webserviceless request does not contain an auth url
+	CerberusReasonWebservicelessAuthURLEmpty CerberusReason = "webserviceless-auth-url-empty"
 )

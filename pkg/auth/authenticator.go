@@ -305,6 +305,10 @@ func readRequestContext(request *Request) (wsvc string, ns string, reason Cerber
 		return "", "", CerberusReasonWebserviceEmpty
 	}
 
+	if wsvc == "none" {
+		return wsvc, "", ""
+	}
+
 	ns = request.Context["namespace"]
 	if ns == "" {
 		return "", "", CerberusReasonWebserviceNamespaceEmpty

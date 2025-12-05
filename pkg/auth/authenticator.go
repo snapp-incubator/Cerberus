@@ -220,15 +220,15 @@ func (a *Authenticator) CheckWebserviceless(ctx context.Context, request *Reques
 }
 
 func wsvcForWebservicelessRequest(request *Request) (WebservicesCacheEntry, CerberusReason) {
-	if request.Context["auth-url"] == "" {
+	if request.Context["authURL"] == "" {
 		return WebservicesCacheEntry{}, CerberusReasonWebservicelessAuthURLEmpty
 	}
 
-	readTokenFrom := request.Context["read-token-from"]
+	readTokenFrom := request.Context["readTokenFrom"]
 	if readTokenFrom == "" {
 		readTokenFrom = "Authorization"
 	}
-	writeTokenTo := request.Context["write-token-to"]
+	writeTokenTo := request.Context["writeTokenTo"]
 	if writeTokenTo == "" {
 		writeTokenTo = "Authorization"
 	}
@@ -241,11 +241,11 @@ func wsvcForWebservicelessRequest(request *Request) (WebservicesCacheEntry, Cerb
 		WebService: v1alpha1.WebService{
 			Spec: v1alpha1.WebServiceSpec{
 				UpstreamHttpAuth: v1alpha1.UpstreamHttpAuthService{
-					Address:       request.Context["auth-url"],
+					Address:       request.Context["authURL"],
 					ReadTokenFrom: readTokenFrom,
 					WriteTokenTo:  writeTokenTo,
 					Timeout:       timeout,
-					CareHeaders:   strings.Split(request.Context["care-headers"], ","),
+					CareHeaders:   strings.Split(request.Context["careHeaders"], ","),
 				},
 			},
 		},

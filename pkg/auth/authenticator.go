@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -168,6 +169,11 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (finalRespo
 	ctx, span := startSpan(ctx, request.Request, wsvc, ns)
 	defer endSpan(span, start_time, finalResponse, reason)
 
+	if wsvc == "none" {
+		reason, headers := a.CheckWebserviceless(ctx, request)
+		return generateResponse(reason, headers), nil
+	}
+
 	if reason != "" {
 		return generateResponse(reason, nil), nil
 	}
@@ -200,6 +206,50 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (finalRespo
 
 	finalResponse = generateResponse(reason, extraHeaders)
 	return
+}
+
+func (a *Authenticator) CheckWebserviceless(ctx context.Context, request *Request) (CerberusReason, ExtraHeaders) {
+	wsvc, reason := wsvcForWebservicelessRequest(request)
+	if reason != "" {
+		return reason, nil
+	}
+
+	var extraHeaders ExtraHeaders
+	reason = a.checkServiceUpstreamAuth(wsvc, request, &extraHeaders, ctx)
+	return reason, extraHeaders
+}
+
+func wsvcForWebservicelessRequest(request *Request) (WebservicesCacheEntry, CerberusReason) {
+	if request.Context["authURL"] == "" {
+		return WebservicesCacheEntry{}, CerberusReasonWebservicelessAuthURLEmpty
+	}
+
+	readTokenFrom := request.Context["readTokenFrom"]
+	if readTokenFrom == "" {
+		readTokenFrom = "Authorization"
+	}
+	writeTokenTo := request.Context["writeTokenTo"]
+	if writeTokenTo == "" {
+		writeTokenTo = "Authorization"
+	}
+	timeout, err := strconv.Atoi(request.Context["timeout"])
+	if err != nil {
+		timeout = 200
+	}
+
+	return WebservicesCacheEntry{
+		WebService: v1alpha1.WebService{
+			Spec: v1alpha1.WebServiceSpec{
+				UpstreamHttpAuth: v1alpha1.UpstreamHttpAuthService{
+					Address:       request.Context["authURL"],
+					ReadTokenFrom: readTokenFrom,
+					WriteTokenTo:  writeTokenTo,
+					Timeout:       timeout,
+					CareHeaders:   strings.Split(request.Context["careHeaders"], ","),
+				},
+			},
+		},
+	}, ""
 }
 
 // startSpan starts span for Check Function
@@ -253,6 +303,10 @@ func readRequestContext(request *Request) (wsvc string, ns string, reason Cerber
 	wsvc = request.Context["webservice"]
 	if wsvc == "" {
 		return "", "", CerberusReasonWebserviceEmpty
+	}
+
+	if wsvc == "none" {
+		return wsvc, "", ""
 	}
 
 	ns = request.Context["namespace"]

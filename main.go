@@ -148,10 +148,15 @@ func setupManager(
 
 		// limit Manager to cerberus namespace
 		NewCache: func(config *rest.Config, opts controllercache.Options) (controllercache.Cache, error) {
+			operatorNamespace := os.Getenv("OPERATOR_NAMESPACE")
+			if operatorNamespace == "" {
+				operatorNamespace = "cerberus-operator-system"
+			}
+
 			opts.ByObject = make(map[client.Object]controllercache.ByObject)
 			opts.ByObject[&v1.Secret{}] = controllercache.ByObject{
 				Namespaces: map[string]controllercache.Config{
-					"cerberus-operator-system": {},
+					operatorNamespace: {},
 				},
 			}
 

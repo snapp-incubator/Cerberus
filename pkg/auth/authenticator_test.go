@@ -128,13 +128,13 @@ func TestReadService(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.wsvc, func(t *testing.T) {
-			reason, _ := authenticator.readService(tc.wsvc)
+			reason, entry := authenticator.readService(tc.wsvc)
 			if reason != tc.expectedReason {
 				t.Errorf("Expected reason: %v, Got: %v", tc.expectedReason, reason)
 			}
-			// if ok {
-			//TODO: Check cache entry fields, e.g., cacheEntry.SomeField
-			// }
+			if tc.expectedOk {
+				assert.Equal(t, tc.expectedCacheEntry, entry, "Cache entry mismatch")
+			}
 		})
 	}
 }
@@ -529,7 +529,7 @@ func prepareSecrets(count int) []corev1.Secret {
 	// Create and prepare secrets with unique names.
 	secrets := make([]corev1.Secret, count)
 	for i := 0; i < count; i++ {
-		secretName := fmt.Sprintf("test-secret-%d", i)
+		secretName := fmt.Sprintf(".test-token-%d", i)
 		secrets[i] = corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: "default"},
 			Data: map[string][]byte{
@@ -578,8 +578,7 @@ func assertCachesPopulated(t *testing.T, authenticator *Authenticator) {
 	authenticator.cacheLock.RLock()
 	defer authenticator.cacheLock.RUnlock()
 
-	//TODO: check this error
-	//assert.NotEmpty(t, authenticator.accessTokensCache)
+	assert.NotEmpty(t, authenticator.accessTokensCache)
 	assert.NotEmpty(t, authenticator.webservicesCache)
 }
 

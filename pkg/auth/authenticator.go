@@ -35,6 +35,12 @@ func getServiceName() string {
 	return "cerberus"
 }
 
+// getTenantIDHeader returns the header name to copy from request to upstream auth from env TENANT_ID_HEADER.
+// If unset, returns empty string and no header is copied.
+func getTenantIDHeader() string {
+	return os.Getenv("TENANT_ID_HEADER")
+}
+
 // Authenticator can generate cache from Kubernetes API server
 // and it implements envoy.CheckRequest interface
 type Authenticator struct {
@@ -379,6 +385,11 @@ func setupUpstreamAuthRequest(upstreamHttpAuth *v1alpha1.UpstreamHttpAuthService
 		upstreamHttpAuth.WriteTokenTo: {token},
 		"X-Service-Name":              {svcName},
 		"Content-Type":                {"application/json"},
+	}
+	if tenantIDHeader := getTenantIDHeader(); tenantIDHeader != "" {
+		if v := request.Request.Header.Get(tenantIDHeader); v != "" {
+			req.Header.Set(tenantIDHeader, v)
+		}
 	}
 	return req, nil
 }

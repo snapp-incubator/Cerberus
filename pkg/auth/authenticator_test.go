@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -959,6 +960,15 @@ func TestProcessResponseError(t *testing.T) {
 }
 
 func TestSetupUpstreamAuthRequest(t *testing.T) {
+	// Ensure TENANT_ID_HEADER is unset so base case is deterministic
+	prevTenantID := os.Getenv("TENANT_ID_HEADER")
+	_ = os.Unsetenv("TENANT_ID_HEADER")
+	defer func() {
+		if prevTenantID != "" {
+			_ = os.Setenv("TENANT_ID_HEADER", prevTenantID)
+		}
+	}()
+
 	// Test case 1: Successful setup
 	upstreamAuth := &cerberusv1alpha1.UpstreamHttpAuthService{
 		ReadTokenFrom: "X-Token-Read",
@@ -1020,6 +1030,48 @@ func TestSetupUpstreamAuthRequest_ServiceName_Context(t *testing.T) {
 	httpReq, err := setupUpstreamAuthRequest(upstreamAuth, request)
 	assert.NoError(t, err)
 	assert.Equal(t, "test-service", httpReq.Header.Get("X-Service-Name"))
+}
+
+func TestSetupUpstreamAuthRequest_TenantIDHeader(t *testing.T) {
+	prev := os.Getenv("TENANT_ID_HEADER")
+	defer func() {
+		if prev != "" {
+			_ = os.Setenv("TENANT_ID_HEADER", prev)
+		} else {
+			_ = os.Unsetenv("TENANT_ID_HEADER")
+		}
+	}()
+
+	upstreamAuth := &cerberusv1alpha1.UpstreamHttpAuthService{
+		ReadTokenFrom: "X-Token-Read",
+		WriteTokenTo:  "X-Token-Write",
+		Address:       "http://example.com",
+	}
+
+	for name, tc := range map[string]struct {
+		envSet       bool
+		requestHas   bool
+		wantInHeader string
+	}{
+		"env set and header present copies value":     {envSet: true, requestHas: true, wantInHeader: "tenant-123"},
+		"env set but header missing does not set":     {envSet: true, requestHas: false, wantInHeader: ""},
+		"env unset does nothing":                      {envSet: false, requestHas: true, wantInHeader: ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if tc.envSet {
+				_ = os.Setenv("TENANT_ID_HEADER", "X-Tenant-Id")
+			} else {
+				_ = os.Unsetenv("TENANT_ID_HEADER")
+			}
+			header := http.Header{"X-Token-Read": {"token"}}
+			if tc.requestHas {
+				header["X-Tenant-Id"] = []string{"tenant-123"}
+			}
+			req, err := setupUpstreamAuthRequest(upstreamAuth, &Request{Request: http.Request{Header: header}})
+			assert.NoError(t, err)
+			assert.Equal(t, tc.wantInHeader, req.Header.Get("X-Tenant-Id"))
+		})
+	}
 }
 
 func TestCheck_SuccessfulAuthentication(t *testing.T) {

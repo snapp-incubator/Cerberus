@@ -474,6 +474,7 @@ func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, 
 	if resp != nil {
 		span.SetAttributes(attribute.Int("upstream-auth-status-code", resp.StatusCode))
 		labels := AddWithDownstreamDeadlineLabel(AddStatusLabel(nil, resp.StatusCode), hasDownstreamDeadline)
+		labels = AddTenantIDLabel(labels, resp.Header.Get(TenantIDHeader))
 		upstreamAuthRequestDuration.With(labels).Observe(reqDuration.Seconds())
 	} else {
 		labels := AddWithDownstreamDeadlineLabel(nil, hasDownstreamDeadline)

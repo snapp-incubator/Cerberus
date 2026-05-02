@@ -12,6 +12,8 @@ const (
 	CheckRequestVersionLabel    = "check_request_version"
 	HasUpstreamAuth             = "upstream_auth_enabled"
 	ObjectKindLabel             = "kind"
+	TenantIDHeader              = "X-Tenant-ID"
+	TenantIDLabel               = "tenant_id"
 	WithDownstreamDeadlineLabel = "with_downstream_deadline"
 	WebserviceLabel             = "webservice"
 
@@ -34,7 +36,7 @@ var (
 			Name: "check_request_count",
 			Help: "CheckRequest count",
 		},
-		[]string{CerberusReasonLabel, CheckRequestVersionLabel, HasUpstreamAuth, WebserviceLabel},
+		[]string{CerberusReasonLabel, CheckRequestVersionLabel, HasUpstreamAuth, TenantIDLabel, WebserviceLabel},
 	)
 
 	reqLatency = prometheus.NewHistogramVec(
@@ -43,7 +45,7 @@ var (
 			Help:    "CheckRequest durations (response times)",
 			Buckets: DurationBuckets,
 		},
-		[]string{CerberusReasonLabel, CheckRequestVersionLabel, HasUpstreamAuth},
+		[]string{CerberusReasonLabel, CheckRequestVersionLabel, HasUpstreamAuth, TenantIDLabel},
 	)
 
 	cacheUpdateCount = prometheus.NewCounter(
@@ -121,7 +123,7 @@ var (
 			Help:    "Duration of the UpstreamAuth Requests in seconds",
 			Buckets: DurationBuckets,
 		},
-		[]string{StatusCode, WithDownstreamDeadlineLabel},
+		[]string{StatusCode, TenantIDLabel, WithDownstreamDeadlineLabel},
 	)
 
 	upstreamAuthFailedRequests = prometheus.NewCounterVec(
@@ -187,6 +189,14 @@ func AddUpstreamAuthLabel(labels prometheus.Labels, hasUpstreamAuth string) prom
 		labels = prometheus.Labels{}
 	}
 	labels[HasUpstreamAuth] = hasUpstreamAuth
+	return labels
+}
+
+func AddTenantIDLabel(labels prometheus.Labels, tenantID string) prometheus.Labels {
+	if labels == nil {
+		labels = prometheus.Labels{}
+	}
+	labels[TenantIDLabel] = tenantID
 	return labels
 }
 

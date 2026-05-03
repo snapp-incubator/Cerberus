@@ -874,6 +874,8 @@ func TestAdjustTimeoutWithHTTPClientMock(t *testing.T) {
 }
 
 func TestCopyUpstreamHeaders(t *testing.T) {
+	t.Setenv("TENANT_ID_HEADER", "X-Tenant-Id")
+
 	// Test case 1: Header is copied to extraHeaders
 	resp := &http.Response{
 		Header: http.Header{
@@ -916,6 +918,18 @@ func TestCopyUpstreamHeaders(t *testing.T) {
 	assert.Equal(t, "Value1", extraHeaders["Header1"], "Header1 should be copied to extraHeaders")
 	assert.Empty(t, extraHeaders["Header2"], "Header2 should not be copied to extraHeaders")
 	assert.Equal(t, "Value3", extraHeaders["Header3"], "Header3 should be copied to extraHeaders")
+
+	// Test case 4: Tenant ID is copied even when it is not listed in careHeaders
+	resp = &http.Response{
+		Header: http.Header{
+			"X-Tenant-Id": {"tenant-123"},
+		},
+	}
+	extraHeaders = nil
+	careHeaders = []string{}
+
+	copyUpstreamHeaders(resp, &extraHeaders, careHeaders)
+	assert.Equal(t, "tenant-123", extraHeaders["X-Tenant-Id"], "Tenant ID should always be copied to extraHeaders")
 }
 
 // Mock error interface with timeout interface implementation for
@@ -1053,9 +1067,9 @@ func TestSetupUpstreamAuthRequest_TenantIDHeader(t *testing.T) {
 		requestHas   bool
 		wantInHeader string
 	}{
-		"env set and header present copies value":     {envSet: true, requestHas: true, wantInHeader: "tenant-123"},
-		"env set but header missing does not set":     {envSet: true, requestHas: false, wantInHeader: ""},
-		"env unset does nothing":                      {envSet: false, requestHas: true, wantInHeader: ""},
+		"env set and header present copies value": {envSet: true, requestHas: true, wantInHeader: "tenant-123"},
+		"env set but header missing does not set": {envSet: true, requestHas: false, wantInHeader: ""},
+		"env unset does nothing":                  {envSet: false, requestHas: true, wantInHeader: ""},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if tc.envSet {
@@ -1075,12 +1089,17 @@ func TestSetupUpstreamAuthRequest_TenantIDHeader(t *testing.T) {
 }
 
 func TestCheck_SuccessfulAuthentication(t *testing.T) {
+	t.Setenv("TENANT_ID_HEADER", "X-Tenant-Id")
+
 	mockHTTPClient := &http.Client{
 		Transport: &MockTransport{
 			DoFunc: func(req *http.Request) (*http.Response, error) {
 				return &http.Response{
 					StatusCode: http.StatusOK,
 					Body:       io.NopCloser(strings.NewReader("")),
+					Header: http.Header{
+						"X-Tenant-Id": {"tenant-123"},
+					},
 				}, nil
 			},
 		},
@@ -1125,6 +1144,7 @@ func TestCheck_SuccessfulAuthentication(t *testing.T) {
 	assert.NoError(t, err, "Expected no error for successful authentication")
 	assert.NotNil(t, finalResponse, "Expected a non-nil response for successful authentication")
 	assert.True(t, finalResponse.Allow, "Expected the request to be allowed for valid token and service")
+	assert.Equal(t, "tenant-123", finalResponse.Response.Header.Get(TenantIDHeader), "Expected tenant ID to be forwarded on allowed response")
 }
 
 func TestCheck_TokenNotFound(t *testing.T) {
@@ -1265,12 +1285,17 @@ func TestCheck_InvalidServiceName(t *testing.T) {
 }
 
 func TestCheck_UpstreamAuthUnauthorized(t *testing.T) {
+	t.Setenv("TENANT_ID_HEADER", "X-Tenant-Id")
+
 	mockHTTPClient := &http.Client{
 		Transport: &MockTransport{
 			DoFunc: func(req *http.Request) (*http.Response, error) {
 				return &http.Response{
 					StatusCode: http.StatusUnauthorized,
 					Body:       io.NopCloser(strings.NewReader("Unauthorized")),
+					Header: http.Header{
+						"X-Tenant-Id": {"tenant-unauthorized"},
+					},
 				}, nil
 			},
 		},
@@ -1315,6 +1340,7 @@ func TestCheck_UpstreamAuthUnauthorized(t *testing.T) {
 	assert.NotNil(t, finalResponse, "Expected a non-nil response")
 	assert.False(t, finalResponse.Allow, "Expected the request to be denied due to unauthorized upstream authentication")
 	assert.Equal(t, "unauthorized", finalResponse.Response.Header.Get("X-Cerberus-Reason"), "Expected reason to indicate unauthorized")
+	assert.Equal(t, "tenant-unauthorized", finalResponse.Response.Header.Get(TenantIDHeader), "Expected tenant ID to be forwarded on denied response")
 }
 
 func TestCheck_UpstreamAuthFailed(t *testing.T) {

@@ -407,6 +407,15 @@ func (a *Authenticator) adjustTimeout(timeout int, downstreamDeadline time.Time,
 // copyUpstreamHeaders copy a listing caring headers from upstream response to
 // response headers
 func copyUpstreamHeaders(resp *http.Response, extraHeaders *ExtraHeaders, careHeaders []string) {
+	if *extraHeaders == nil {
+		*extraHeaders = make(ExtraHeaders)
+	}
+	if tenantIDHeader := getTenantIDHeader(); tenantIDHeader != "" {
+		if tenantID := resp.Header.Get(tenantIDHeader); tenantID != "" {
+			(*extraHeaders)[tenantIDHeader] = tenantID
+		}
+	}
+
 	// Add requested careHeaders to extraHeaders for response
 	for header, values := range resp.Header {
 		for _, careHeader := range careHeaders {
@@ -474,7 +483,7 @@ func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, 
 	if resp != nil {
 		span.SetAttributes(attribute.Int("upstream-auth-status-code", resp.StatusCode))
 		labels := AddWithDownstreamDeadlineLabel(AddStatusLabel(nil, resp.StatusCode), hasDownstreamDeadline)
-		labels = AddTenantIDLabel(labels, resp.Header.Get(TenantIDHeader))
+		labels = AddTenantIDLabel(labels, resp.Header.Get(getTenantIDHeader()))
 		upstreamAuthRequestDuration.With(labels).Observe(reqDuration.Seconds())
 	} else {
 		labels := AddWithDownstreamDeadlineLabel(nil, hasDownstreamDeadline)
@@ -487,6 +496,9 @@ func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, 
 		return reason
 	}
 
+	// Add requested careHeaders and always forward X-Tenant-ID to downstream.
+	copyUpstreamHeaders(resp, extraHeaders, service.Spec.UpstreamHttpAuth.CareHeaders)
+
 	if resp.StatusCode != http.StatusOK {
 		if resp.StatusCode == StatusServiceIsOverloaded {
 			span.RecordError(err)
@@ -498,8 +510,6 @@ func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, 
 		span.SetStatus(otelcodes.Error, "upstream auth non 200 status code")
 		return CerberusReasonUnauthorized
 	}
-	// add requested careHeaders to extraHeaders for response
-	copyUpstreamHeaders(resp, extraHeaders, service.Spec.UpstreamHttpAuth.CareHeaders)
 	return ""
 }
 

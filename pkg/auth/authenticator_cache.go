@@ -114,7 +114,7 @@ func retrieveObjects(
 	l client.ObjectList,
 	c client.Client,
 	ctx context.Context,
-	listOpts ...*client.ListOptions,
+	_ ...*client.ListOptions,
 ) error {
 	t := time.Now()
 	metricsLabel := reflect.TypeOf(l).Elem().String()

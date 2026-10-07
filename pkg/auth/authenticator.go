@@ -63,6 +63,12 @@ type ExtraHeaders map[string]string
 const (
 	CerberusHeaderReasonHeader string = "X-Cerberus-Reason"
 	ExternalAuthHandlerHeader  string = "X-Auth-Handler"
+
+	// CerberusDebugHeader is the request header that makes Cerberus expose its
+	// X-Cerberus-* headers to the client. Any non-empty value enables it.
+	CerberusDebugHeader string = "X-Cerberus-Debug"
+
+	cerberusHeaderPrefix string = "X-Cerberus-"
 )
 
 // CerberusHeaderName is the type which is used to identifies header name
@@ -174,6 +180,11 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (finalRespo
 	// generate opentelemetry span with given parameters
 	ctx, span := startSpan(ctx, request.Request, wsvc, ns)
 	defer endSpan(span, start_time, finalResponse, reason)
+	defer func() {
+		if finalResponse != nil {
+			finalResponse.Debug = request.Request.Header.Get(CerberusDebugHeader) != ""
+		}
+	}()
 
 	if wsvc == "none" {
 		reason, headers := a.CheckWebserviceless(ctx, request)

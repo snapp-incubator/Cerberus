@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -40,9 +41,12 @@ func (t *Testserver) Check(xts context.Context, request *Request) (*Response, er
 
 	// Reflect the authorization check context into the response headers.
 	for k, v := range request.Context {
+		if !regexp.MustCompile(`^[a-zA-Z0-9-_]+$`).MatchString(k) {
+			t.Log.Info("invalid context key", "key", k)
+			continue
+		}
 		key := fmt.Sprintf("Auth-Context-%s", k)
-		key = http.CanonicalHeaderKey(key) // XXX(jpeach) this will not transform invalid characters
-
+		key = http.CanonicalHeaderKey(key)
 		response.Response.Header.Add(key, v)
 	}
 

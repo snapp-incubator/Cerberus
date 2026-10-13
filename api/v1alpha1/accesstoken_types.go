@@ -100,7 +100,3 @@ type AccessTokenList struct {
 func (at AccessToken) LocalName() string {
 	return at.Namespace + "/" + at.Name
 }
-
-func init() {
-	SchemeBuilder.Register(&AccessToken{}, &AccessTokenList{})
-}

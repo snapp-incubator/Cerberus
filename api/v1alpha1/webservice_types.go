@@ -121,7 +121,3 @@ func (w WebService) LocalName() string {
 		Namespace: w.Namespace,
 	}.LocalName()
 }
-
-func init() {
-	SchemeBuilder.Register(&WebService{}, &WebServiceList{})
-}

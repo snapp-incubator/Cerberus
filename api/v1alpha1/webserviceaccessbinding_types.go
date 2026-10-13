@@ -58,7 +58,3 @@ type WebserviceAccessBindingList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []WebserviceAccessBinding `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&WebserviceAccessBinding{}, &WebserviceAccessBindingList{})
-}

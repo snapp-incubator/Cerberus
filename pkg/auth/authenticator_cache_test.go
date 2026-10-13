@@ -366,8 +366,8 @@ func TestAccessTokensCache_buildAllowedWebservicesCache(t *testing.T) {
 		},
 		allowedNamespacesCache: AllowedNamespacesCache{"namespace1": struct{}{}},
 	}
-	cache[cacheEntry1.WebService.LocalName()] = cacheEntry1
-	cache["namespace1/"+cacheEntry2.WebService.Name] = cacheEntry2
+	cache[cacheEntry1.LocalName()] = cacheEntry1
+	cache["namespace1/"+cacheEntry2.Name] = cacheEntry2
 
 	// Create a mock AccessTokensCacheEntry
 	accessTokenEntry1 := AccessTokensCacheEntry{
@@ -453,8 +453,8 @@ func TestAccessTokensCacheEntry_buildAllowedWebservicesCache(t *testing.T) {
 		},
 		allowedNamespacesCache: AllowedNamespacesCache{"namespace1": struct{}{}},
 	}
-	cache[cacheEntry1.WebService.LocalName()] = cacheEntry1
-	cache["namespace1/"+cacheEntry2.WebService.Name] = cacheEntry2
+	cache[cacheEntry1.LocalName()] = cacheEntry1
+	cache["namespace1/"+cacheEntry2.Name] = cacheEntry2
 
 	// Create a mock AccessTokensCacheEntry
 	accessToken := AccessTokensCacheEntry{

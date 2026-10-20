@@ -1458,3 +1458,22 @@ func TestCheck_UpstreamAuthTimeout(t *testing.T) {
 	assert.False(t, finalResponse.Allow, "Expected the request to be denied due to upstream authentication timeout")
 	assert.Equal(t, "upstream-auth-timeout", finalResponse.Response.Header.Get("X-Cerberus-Reason"), "Expected reason to indicate upstream authentication timeout")
 }
+
+func Test_generateResponseRewritesCerberusHeaderValues(t *testing.T) {
+	t.Setenv("HEADER_VALUE_REPLACEMENTS", "baly=bl, labby=lb,laby=lb,kafo=kf,broken")
+
+	resp := generateResponse("", ExtraHeaders{
+		string(CerberusHeaderWebservice):  "baly-map-api/client-search-cache-v1-baly",
+		string(CerberusHeaderAccessToken): "baly-map-api/labby-laby-kafo-token",
+		"X-Tenant-Id":                     "kafo-sy",
+	})
+
+	assert.Equal(t, "bl-map-api/client-search-cache-v1-bl", resp.Response.Header.Get(string(CerberusHeaderWebservice)))
+	assert.Equal(t, "bl-map-api/lb-lb-kf-token", resp.Response.Header.Get(string(CerberusHeaderAccessToken)))
+	assert.Equal(t, "ok", resp.Response.Header.Get(CerberusHeaderReasonHeader))
+	assert.Equal(t, "kafo-sy", resp.Response.Header.Get("X-Tenant-Id"), "non X-Cerberus-* headers must not be rewritten")
+
+	t.Setenv("HEADER_VALUE_REPLACEMENTS", "")
+	resp = generateResponse("", ExtraHeaders{string(CerberusHeaderWebservice): "baly-map-api/x"})
+	assert.Equal(t, "baly-map-api/x", resp.Response.Header.Get(string(CerberusHeaderWebservice)))
+}

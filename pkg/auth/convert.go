@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 
 	envoy_api_v2_core "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	envoy_config_core_v3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -79,29 +78,6 @@ func (r *Request) FromV3(c *CheckRequestV3) *Request {
 type Response struct {
 	Allow    bool
 	Response http.Response
-	// Debug is set when the request carries CerberusDebugHeader. Only then are
-	// X-Cerberus-* headers (other than X-Cerberus-Reason) shown to the client.
-	Debug bool
-}
-
-// clientHeaders returns the headers the downstream client is allowed to see.
-// X-Cerberus-* headers other than X-Cerberus-Reason name internal objects
-// (namespaces, webservices, access tokens), so they are only exposed when the
-// request asked for them with CerberusDebugHeader. An allowed response exposes
-// nothing else: its remaining headers are meant for the upstream only.
-func (r *Response) clientHeaders() http.Header {
-	headers := http.Header{}
-	for k, v := range r.Response.Header {
-		isCerberus := strings.HasPrefix(k, cerberusHeaderPrefix)
-		show := r.Debug && isCerberus
-		if !r.Allow {
-			show = show || !isCerberus || k == CerberusHeaderReasonHeader
-		}
-		if show {
-			headers[k] = v
-		}
-	}
-	return headers
 }
 
 // AsV2 converts to a v2 CheckResponse.
@@ -135,7 +111,7 @@ func (r *Response) AsV2() *CheckResponseV2 {
 		Status: &status.Status{Code: int32(codes.PermissionDenied)},
 		HttpResponse: &envoy_service_auth_v2.CheckResponse_DeniedResponse{
 			DeniedResponse: &envoy_service_auth_v2.DeniedHttpResponse{
-				Headers: convertHeaders(r.clientHeaders()),
+				Headers: convertHeaders(r.Response.Header),
 				Status: &envoy_type.HttpStatus{
 					Code: envoy_type.StatusCode(r.Response.StatusCode),
 				},
@@ -166,8 +142,6 @@ func (r *Response) AsV3() *CheckResponseV3 {
 			HttpResponse: &envoy_service_auth_v3.CheckResponse_OkResponse{
 				OkResponse: &envoy_service_auth_v3.OkHttpResponse{
 					Headers: convertHeaders(r.Response.Header),
-					// the v2 API has no equivalent, so v2 callers get no debug headers on success
-					ResponseHeadersToAdd: convertHeaders(r.clientHeaders()),
 				},
 			},
 		}
@@ -177,7 +151,7 @@ func (r *Response) AsV3() *CheckResponseV3 {
 		Status: &status.Status{Code: int32(codes.PermissionDenied)},
 		HttpResponse: &envoy_service_auth_v3.CheckResponse_DeniedResponse{
 			DeniedResponse: &envoy_service_auth_v3.DeniedHttpResponse{
-				Headers: convertHeaders(r.clientHeaders()),
+				Headers: convertHeaders(r.Response.Header),
 				Status: &envoy_type_v3.HttpStatus{
 					Code: envoy_type_v3.StatusCode(r.Response.StatusCode),
 				},

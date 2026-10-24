@@ -41,12 +41,12 @@ func getTenantIDHeader() string {
 	return os.Getenv("TENANT_ID_HEADER")
 }
 
-// getHeaderValueReplacer returns a replacer built from env HEADER_VALUE_REPLACEMENTS
-// ("from=to,from=to", e.g. "baly=bl,kafo=kf"). It rewrites X-Cerberus-* header values
-// so internal names (namespaces, tokens) can be masked. If unset, returns nil.
-func getHeaderValueReplacer() *strings.Replacer {
+// newHeaderValueReplacer returns a replacer built from spec ("from=to,from=to",
+// e.g. "baly=bl,kafo=kf"). Malformed entries are skipped. If no valid entry
+// remains, it returns nil.
+func newHeaderValueReplacer(spec string) *strings.Replacer {
 	var pairs []string
-	for _, pair := range strings.Split(os.Getenv("HEADER_VALUE_REPLACEMENTS"), ",") {
+	for _, pair := range strings.Split(spec, ",") {
 		if from, to, ok := strings.Cut(strings.TrimSpace(pair), "="); ok && from != "" {
 			pairs = append(pairs, from, to)
 		}
@@ -56,6 +56,13 @@ func getHeaderValueReplacer() *strings.Replacer {
 	}
 	return strings.NewReplacer(pairs...)
 }
+
+// headerValueReplacer returns the replacer built once from env HEADER_VALUE_REPLACEMENTS.
+// It rewrites X-Cerberus-* header values so internal names (namespaces, tokens) can be
+// masked. If unset, it returns nil.
+var headerValueReplacer = sync.OnceValue(func() *strings.Replacer {
+	return newHeaderValueReplacer(os.Getenv("HEADER_VALUE_REPLACEMENTS"))
+})
 
 // Authenticator can generate cache from Kubernetes API server
 // and it implements envoy.CheckRequest interface
@@ -563,9 +570,10 @@ func generateResponse(reason CerberusReason, extraHeaders ExtraHeaders) *Respons
 		response.Header.Add(string(key), value)
 	}
 
-	if replacer := getHeaderValueReplacer(); replacer != nil {
+	// X-Cerberus-Reason is never rewritten: its values are fixed reasons, not internal names
+	if replacer := headerValueReplacer(); replacer != nil {
 		for key, values := range response.Header {
-			if strings.HasPrefix(key, "X-Cerberus-") {
+			if key != CerberusHeaderReasonHeader && strings.HasPrefix(key, "X-Cerberus-") {
 				for i, v := range values {
 					values[i] = replacer.Replace(v)
 				}

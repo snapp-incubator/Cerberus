@@ -2,6 +2,10 @@ module github.com/snapp-incubator/Cerberus
 
 go 1.26.0
 
+// Go >= 1.24 listens with Multipath TCP by default; on some kernels (e.g. FCOS 6.2)
+// MPTCP listeners reset every connection, breaking probes, metrics and gRPC.
+godebug multipathtcp=0
+
 require (
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
 	github.com/envoyproxy/go-control-plane/envoy v1.39.0

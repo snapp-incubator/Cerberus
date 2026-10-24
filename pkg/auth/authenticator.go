@@ -41,6 +41,29 @@ func getTenantIDHeader() string {
 	return os.Getenv("TENANT_ID_HEADER")
 }
 
+// newHeaderValueReplacer returns a replacer built from spec ("from=to,from=to",
+// e.g. "baly=bl,kafo=kf"). Malformed entries are skipped. If no valid entry
+// remains, it returns nil.
+func newHeaderValueReplacer(spec string) *strings.Replacer {
+	var pairs []string
+	for _, pair := range strings.Split(spec, ",") {
+		if from, to, ok := strings.Cut(strings.TrimSpace(pair), "="); ok && from != "" {
+			pairs = append(pairs, from, to)
+		}
+	}
+	if len(pairs) == 0 {
+		return nil
+	}
+	return strings.NewReplacer(pairs...)
+}
+
+// headerValueReplacer returns the replacer built once from env HEADER_VALUE_REPLACEMENTS.
+// It rewrites X-Cerberus-* header values so internal names (namespaces, tokens) can be
+// masked. If unset, it returns nil.
+var headerValueReplacer = sync.OnceValue(func() *strings.Replacer {
+	return newHeaderValueReplacer(os.Getenv("HEADER_VALUE_REPLACEMENTS"))
+})
+
 // Authenticator can generate cache from Kubernetes API server
 // and it implements envoy.CheckRequest interface
 type Authenticator struct {
@@ -63,12 +86,6 @@ type ExtraHeaders map[string]string
 const (
 	CerberusHeaderReasonHeader string = "X-Cerberus-Reason"
 	ExternalAuthHandlerHeader  string = "X-Auth-Handler"
-
-	// CerberusDebugHeader is the request header that makes Cerberus expose its
-	// X-Cerberus-* headers to the client. Any non-empty value enables it.
-	CerberusDebugHeader string = "X-Cerberus-Debug"
-
-	cerberusHeaderPrefix string = "X-Cerberus-"
 )
 
 // CerberusHeaderName is the type which is used to identifies header name
@@ -180,11 +197,6 @@ func (a *Authenticator) Check(ctx context.Context, request *Request) (finalRespo
 	// generate opentelemetry span with given parameters
 	ctx, span := startSpan(ctx, request.Request, wsvc, ns)
 	defer endSpan(span, start_time, finalResponse, reason)
-	defer func() {
-		if finalResponse != nil {
-			finalResponse.Debug = request.Request.Header.Get(CerberusDebugHeader) != ""
-		}
-	}()
 
 	if wsvc == "none" {
 		reason, headers := a.CheckWebserviceless(ctx, request)
@@ -556,6 +568,17 @@ func generateResponse(reason CerberusReason, extraHeaders ExtraHeaders) *Respons
 
 	for key, value := range extraHeaders {
 		response.Header.Add(string(key), value)
+	}
+
+	// X-Cerberus-Reason is never rewritten: its values are fixed reasons, not internal names
+	if replacer := headerValueReplacer(); replacer != nil {
+		for key, values := range response.Header {
+			if key != CerberusHeaderReasonHeader && strings.HasPrefix(key, "X-Cerberus-") {
+				for i, v := range values {
+					values[i] = replacer.Replace(v)
+				}
+			}
+		}
 	}
 
 	return &Response{

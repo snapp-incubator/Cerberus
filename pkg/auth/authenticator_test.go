@@ -1458,3 +1458,37 @@ func TestCheck_UpstreamAuthTimeout(t *testing.T) {
 	assert.False(t, finalResponse.Allow, "Expected the request to be denied due to upstream authentication timeout")
 	assert.Equal(t, "upstream-auth-timeout", finalResponse.Response.Header.Get("X-Cerberus-Reason"), "Expected reason to indicate upstream authentication timeout")
 }
+
+func setHeaderValueReplacements(t *testing.T, spec string) {
+	original := headerValueReplacer
+	t.Cleanup(func() { headerValueReplacer = original })
+	headerValueReplacer = func() *strings.Replacer { return newHeaderValueReplacer(spec) }
+}
+
+func Test_generateResponseRewritesCerberusHeaderValues(t *testing.T) {
+	setHeaderValueReplacements(t, "baly=bl, labby=lb,laby=lb,kafo=kf,broken,token=tk")
+
+	resp := generateResponse("", ExtraHeaders{
+		string(CerberusHeaderWebservice):  "baly-map-api/client-search-cache-v1-baly",
+		string(CerberusHeaderAccessToken): "baly-map-api/labby-laby-kafo-token",
+		"X-Tenant-Id":                     "kafo-sy",
+	})
+
+	assert.Equal(t, "bl-map-api/client-search-cache-v1-bl", resp.Response.Header.Get(string(CerberusHeaderWebservice)))
+	assert.Equal(t, "bl-map-api/lb-lb-kf-tk", resp.Response.Header.Get(string(CerberusHeaderAccessToken)))
+	assert.Equal(t, "ok", resp.Response.Header.Get(CerberusHeaderReasonHeader))
+	assert.Equal(t, "kafo-sy", resp.Response.Header.Get("X-Tenant-Id"), "non X-Cerberus-* headers must not be rewritten")
+
+	resp = generateResponse(CerberusReasonTokenNotFound, nil)
+	assert.Equal(t, string(CerberusReasonTokenNotFound), resp.Response.Header.Get(CerberusHeaderReasonHeader), "X-Cerberus-Reason must not be rewritten")
+
+	setHeaderValueReplacements(t, "")
+	resp = generateResponse("", ExtraHeaders{string(CerberusHeaderWebservice): "baly-map-api/x"})
+	assert.Equal(t, "baly-map-api/x", resp.Response.Header.Get(string(CerberusHeaderWebservice)))
+}
+
+func Test_newHeaderValueReplacer(t *testing.T) {
+	assert.Nil(t, newHeaderValueReplacer(""))
+	assert.Nil(t, newHeaderValueReplacer("broken,=x"))
+	assert.Equal(t, "bl-x", newHeaderValueReplacer("baly=bl").Replace("baly-x"))
+}

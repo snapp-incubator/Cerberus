@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -25,6 +26,28 @@ import (
 // downstreamDeadlineOffset sets an offset to downstream deadline inorder
 // to save a little time to update metrics and answer downstream request
 const downstreamDeadlineOffset = 50 * time.Microsecond
+
+// upstreamAuthMaxIdleConnsPerHost is how many idle connections the upstream
+// auth client keeps per host. An upstream auth service is usually one host (a
+// Kubernetes Service), and Go's default of 2 makes every call beyond the second
+// in flight open a new connection and close it afterwards. Under load that
+// churn feeds itself: new connections cost time and CPU, which keeps more calls
+// in flight, which opens more connections.
+const upstreamAuthMaxIdleConnsPerHost = 256
+
+// upstreamAuthMaxDrainBytes bounds how much of an upstream auth response body
+// is read before closing it, so the connection can go back to the pool.
+const upstreamAuthMaxDrainBytes = 4 << 10
+
+// newUpstreamAuthHTTPClient returns the HTTP client used for upstream auth
+// calls. Timeouts are set per request through the request context, never on
+// the shared client.
+func newUpstreamAuthHTTPClient() *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = 4 * upstreamAuthMaxIdleConnsPerHost
+	transport.MaxIdleConnsPerHost = upstreamAuthMaxIdleConnsPerHost
+	return &http.Client{Transport: transport}
+}
 
 // getServiceName returns the service name from environment variable SERVICE_NAME
 // or defaults to "cerberus" if not set
@@ -362,7 +385,7 @@ func defineValidators() []AuthenticationValidation {
 func NewAuthenticator(logger logr.Logger) *Authenticator {
 	a := Authenticator{
 		logger:     logger,
-		httpClient: &http.Client{},
+		httpClient: newUpstreamAuthHTTPClient(),
 	}
 	a.validators = defineValidators()
 	return &a
@@ -417,14 +440,17 @@ func setupUpstreamAuthRequest(upstreamHttpAuth *v1alpha1.UpstreamHttpAuthService
 	return req, nil
 }
 
-// adjustTimeout sets timeout value for httpClient.timeout
-func (a *Authenticator) adjustTimeout(timeout int, downstreamDeadline time.Time, hasDownstreamDeadline bool) {
-	a.httpClient.Timeout = time.Duration(timeout) * time.Millisecond
+// upstreamAuthTimeout returns the timeout for one upstream auth call: the
+// webservice's timeout, shortened to fit the downstream deadline when there is
+// one.
+func upstreamAuthTimeout(timeout int, downstreamDeadline time.Time, hasDownstreamDeadline bool) time.Duration {
+	t := time.Duration(timeout) * time.Millisecond
 	if hasDownstreamDeadline {
-		if time.Until(downstreamDeadline)-downstreamDeadlineOffset < a.httpClient.Timeout {
-			a.httpClient.Timeout = time.Until(downstreamDeadline) - downstreamDeadlineOffset
+		if remaining := time.Until(downstreamDeadline) - downstreamDeadlineOffset; remaining < t {
+			t = remaining
 		}
 	}
+	return t
 }
 
 // copyUpstreamHeaders copy a listing caring headers from upstream response to
@@ -491,11 +517,19 @@ func (a *Authenticator) checkServiceUpstreamAuth(service WebservicesCacheEntry, 
 		span.SetStatus(otelcodes.Error, "failed to create upstream auth request")
 		return CerberusReasonUpstreamAuthNoReq
 	}
-	a.adjustTimeout(upstreamAuth.Timeout, downstreamDeadline, hasDownstreamDeadline)
+	reqCtx, cancel := context.WithTimeout(ctx, upstreamAuthTimeout(upstreamAuth.Timeout, downstreamDeadline, hasDownstreamDeadline))
+	defer cancel()
+	req = req.WithContext(reqCtx)
 
 	reqStart := time.Now()
 	resp, err := a.httpClient.Do(req)
 	reqDuration := time.Since(reqStart)
+	if resp != nil {
+		defer func() {
+			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, upstreamAuthMaxDrainBytes))
+			_ = resp.Body.Close()
+		}()
+	}
 
 	span.SetAttributes(
 		attribute.String("upstream-http-request-start", reqStart.Format(tracing.TimeFormat)),

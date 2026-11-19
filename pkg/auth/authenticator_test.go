@@ -829,47 +829,30 @@ func (c *MockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return c.DoFunc(req)
 }
 
-func TestAdjustTimeoutWithHTTPClientMock(t *testing.T) {
-	// Test case 1: No downstream deadline
-	transport := &MockTransport{
-		DoFunc: func(req *http.Request) (*http.Response, error) {
-			// Mock response
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       http.NoBody,
-			}, nil
-		},
-	}
-
-	authenticator := Authenticator{
-		httpClient: &http.Client{Transport: transport},
-	}
-
+func TestUpstreamAuthTimeout(t *testing.T) {
 	// TestCase 1: No deadline
 	timeout := 1000
 	downstreamDeadline := time.Now()
 	hasDownstreamDeadline := false
 
 	expectedTimeout := time.Duration(1000) * time.Millisecond
-	authenticator.adjustTimeout(timeout, downstreamDeadline, hasDownstreamDeadline)
-	assert.Equal(t, expectedTimeout, authenticator.httpClient.Timeout, "Timeout should match expected value")
+	assert.Equal(t, expectedTimeout, upstreamAuthTimeout(timeout, downstreamDeadline, hasDownstreamDeadline), "Timeout should match expected value")
 
 	// TestCase 2, With deadline but it is a bad test because it is not deterministic
 	timeout = 1000
 	downstreamDeadline = time.Now().Add(time.Duration(1000) * time.Millisecond)
 	hasDownstreamDeadline = true
 	expectedTimeout = time.Duration(1000)*time.Millisecond - downstreamDeadlineOffset
-	authenticator.adjustTimeout(timeout, downstreamDeadline, hasDownstreamDeadline)
-	assert.NotEqual(t, expectedTimeout, authenticator.httpClient.Timeout)
-	assert.LessOrEqual(t, expectedTimeout-authenticator.httpClient.Timeout, time.Duration(50)*time.Microsecond, "Timeout should match expected value")
+	got := upstreamAuthTimeout(timeout, downstreamDeadline, hasDownstreamDeadline)
+	assert.NotEqual(t, expectedTimeout, got)
+	assert.LessOrEqual(t, expectedTimeout-got, time.Duration(50)*time.Microsecond, "Timeout should match expected value")
 
 	// TestCase 3, With deadline but it is more than httpTimeout
 	timeout = 10
 	downstreamDeadline = time.Now().Add(time.Duration(100) * time.Millisecond)
 	hasDownstreamDeadline = true
 	expectedTimeout = time.Duration(10) * time.Millisecond
-	authenticator.adjustTimeout(timeout, downstreamDeadline, hasDownstreamDeadline)
-	assert.Equal(t, expectedTimeout, authenticator.httpClient.Timeout, "Timeout should match expected value")
+	assert.Equal(t, expectedTimeout, upstreamAuthTimeout(timeout, downstreamDeadline, hasDownstreamDeadline), "Timeout should match expected value")
 
 }
 
